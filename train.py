@@ -22,6 +22,40 @@ from utils.utils import (
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+
+def full_save(
+        checkpoint_path, 
+        steps, 
+        epoch, 
+        generator, 
+        optim_g, 
+        style_encoder, 
+        optim_se, 
+        spec_d, 
+        optim_spec_d,
+    ):
+    save_checkpoint(
+        "{}/tr_{:08d}".format(checkpoint_path, steps), 
+        {
+            'generator': generator.state_dict(),
+            "optim": optim_g.state_dict(),
+            "steps":steps, 
+            "epoch": epoch
+        }
+    )
+    save_checkpoint(
+        "{}/se_{:08d}".format(checkpoint_path, steps), {
+            "encoder": style_encoder.state_dict(),
+            "optim": optim_se.state_dict(),
+        }
+    )
+    save_checkpoint(
+        "{}/de_{:08d}".format(checkpoint_path, steps), {
+            "discriminator": spec_d.state_dict(),
+            "optim": optim_spec_d.state_dict(),
+        }
+    )
+
 # 🔹 Функция обучения
 def train_vocoder(h, dataloader, dataset, checkpoint_path, epochs=30):
     
@@ -93,7 +127,7 @@ def train_vocoder(h, dataloader, dataset, checkpoint_path, epochs=30):
     generator.train()
     style_encoder.train()
     #torch.autograd.set_detect_anomaly(True)
-    for epoch in range(epochs):
+    for epoch in range(max(0, last_epoch), epochs):
         epoch_loss_g_only = 0.0
         epoch_loss_only = 0.0
         with tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} - Train") as pbar:
@@ -160,27 +194,7 @@ def train_vocoder(h, dataloader, dataset, checkpoint_path, epochs=30):
             ], 
             ["x", "y", "res"]
         )
-    save_checkpoint(
-        "{}/tr_{:08d}".format(checkpoint_path, steps), 
-        {
-            'generator': generator.state_dict(),
-            "optim": optim_g.state_dict(),
-            "steps":steps, 
-            "epoch": epoch
-        }
-    )
-    save_checkpoint(
-        "{}/se_{:08d}".format(checkpoint_path, steps), {
-            "encoder": style_encoder.state_dict(),
-            "optim": optim_se.state_dict(),
-        }
-    )
-    save_checkpoint(
-        "{}/de_{:08d}".format(checkpoint_path, steps), {
-            "discriminator": spec_d.state_dict(),
-            "optim": optim_spec_d.state_dict(),
-        }
-    )
+    full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
 
 
 if __name__ == "__main__":
