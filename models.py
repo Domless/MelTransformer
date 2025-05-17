@@ -71,35 +71,6 @@ class MelTransformer(nn.Module):
 
         return out
 
-class MelTransformer2(nn.Module):
-    def __init__(self, mel_dim=80, hidden_dim=256, ideal_dim=256, num_layers=4, nhead=4, is_mel_ideal = False):
-        super().__init__()
-
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=mel_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=mel_dim*2
-        )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-
-        decoder_layer = nn.TransformerDecoderLayer(
-            d_model=mel_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=mel_dim*2
-        )
-        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
-
-    def forward(self, mel_spec, ideal_mel):#speaker_embedding):
-        """
-        mel_spec: [B, T, mel_dim]
-        speaker_embedding: [B, speaker_emb_dim]
-        """
-        # B, T, _ = mel_spec.shape
-
-        # mel -> hidden + position
-        
-        # Encode mel sequence
-        encoded = self.encoder(mel_spec)  # [B, T, H]
-        # Decode: input is encoder output (tgt), context is speaker
-        decoded = self.decoder(tgt=encoded, memory=ideal_mel)  # [B, T, H]
-        return decoded
-
 
 class MelPerceptualLoss(nn.Module):
     def __init__(self):

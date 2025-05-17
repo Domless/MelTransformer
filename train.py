@@ -1,8 +1,11 @@
+import torch.multiprocessing as mp
+mp.set_start_method('spawn', force=True)
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import torch
 import torch.nn.functional as F
+from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from models import MelTransformer, MelPerceptualLoss, MelDiscriminator
@@ -20,6 +23,7 @@ from utils.utils import (
     save_checkpoint
 )
 
+#torch.set_float32_matmul_precision('high')
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -57,8 +61,8 @@ def full_save(
     )
 
 # 🔹 Функция обучения
-def train_vocoder(h, dataloader, dataset, checkpoint_path, epochs=30):
-    
+def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7):
+    # scaler = GradScaler()
     # generator = MelTransformer2(
     #     hidden_dim=128, num_layers=6, nhead=32, ideal_dim=128, is_mel_ideal=True
     # ).to(device)
@@ -73,7 +77,11 @@ def train_vocoder(h, dataloader, dataset, checkpoint_path, epochs=30):
 
     pitch_embed = torch.nn.Embedding(300, 256, padding_idx=0).to(device)
 
-    cp_g, cp_se = None, None
+    # generator = torch.compile(generator)
+    # style_encoder = torch.compile(style_encoder)
+    # spec_d = torch.compile(spec_d)
+
+    cp_g, cp_se, cp_d = None, None, None
 
     if os.path.isdir(checkpoint_path):
         cp_g = scan_checkpoint(checkpoint_path, 'tr_')
@@ -119,44 +127,49 @@ def train_vocoder(h, dataloader, dataset, checkpoint_path, epochs=30):
     g_spec_loss = GeneratorLoss(spec_d).to(device)
     d_spec_loss = DiscriminatorLoss(spec_d).to(device)
 
-    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=h.lr_decay, last_epoch=last_epoch)
-    scheduler_se = torch.optim.lr_scheduler.ExponentialLR(optim_se, gamma=h.lr_decay, last_epoch=last_epoch)
-    scheduler_de = torch.optim.lr_scheduler.ExponentialLR(optim_spec_d, gamma=h.lr_decay, last_epoch=last_epoch)
+    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=h.lr_decay)
+    scheduler_se = torch.optim.lr_scheduler.ExponentialLR(optim_se, gamma=h.lr_decay)
+    scheduler_de = torch.optim.lr_scheduler.ExponentialLR(optim_spec_d, gamma=h.lr_decay)
+
+    print("Learning rate:", scheduler_g.get_last_lr())
 
     spec_d.train()
     generator.train()
     style_encoder.train()
     #torch.autograd.set_detect_anomaly(True)
-    for epoch in range(max(0, last_epoch), epochs):
+    #from torch.profiler import profile, record_function, ProfilerActivity
+    for epoch in range(last_epoch+1, epochs):
         epoch_loss_g_only = 0.0
         epoch_loss_only = 0.0
+        # with profile(
+        #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        #         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+        #         on_trace_ready=torch.profiler.tensorboard_trace_handler('./logdir'),
+        #         record_shapes=True,
+        #         with_stack=True
+        # ) as prof:
+        #     for batch_idx, batch in enumerate(dataloader):
         with tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} - Train") as pbar:
             for batch in pbar:
                 # x, y, y_mel = batch
                 x, y, ideal, note = batch
+                x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
                 x, y = x.permute(0, 2, 1), y.permute(0, 2, 1)
+
+                #with record_function("forward_pass"):
                 ideal_to = style_encoder(ideal.detach())
                 pitch_emb = pitch_embed(f0_to_coarse(note))
-                #x, y, z = x.to(device), y.to(device), z.to(device)
+                    #x, y, z = x.to(device), y.to(device), z.to(device)
                 dec_inp = torch.stack([pitch_emb, ideal_to.detach().squeeze(1)], 1)
-                y_g_hat = generator(x.detach(), dec_inp.detach())#[:, :, :y.shape[2]]
+                y_g_hat = generator(x, dec_inp)#[:, :, :y.shape[2]]
+                gen_ideal = style_encoder(y.detach().permute(0, 2, 1))
 
-                # d_real = discriminator(y)
-                # d_fake = discriminator(y_g_hat.detach())
-
-                # optim_d.zero_grad()
-
-                # loss_d = torch.mean((d_real - 1)**2) + torch.mean((d_fake)**2)
-                # loss_d.backward()
-                # optim_d.step()
             
                 # L1 Mel-Spectrogram Loss
-                mel_l1 = F.l1_loss(y.detach(), y_g_hat) * 10
+                mel_l1 = F.l1_loss(y, y_g_hat) * 10
                 epoch_loss_only += mel_l1.item()
-                spec_loss = g_spec_loss(y.detach(), y_g_hat.detach())
-                #mel_feat = perceptual_loss_fn(y, y_g_hat)
+                spec_loss = g_spec_loss(y, y_g_hat)
                 loss_total = mel_l1 + spec_loss
-                #loss_mel = F.l1_loss(y, y_g_hat) * 45
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -166,21 +179,25 @@ def train_vocoder(h, dataloader, dataset, checkpoint_path, epochs=30):
                 d_loss.backward()
                 optim_spec_d.step()
 
-                gen_ideal = style_encoder(y.detach().permute(0, 2, 1))
                 style_loss = F.l1_loss(ideal_to, gen_ideal)
                 optim_se.zero_grad()
                 style_loss.backward()
                 optim_se.step()
 
-
                 epoch_loss_g_only += loss_total.item()
-                pbar.set_postfix(loss=loss_total.item(), style_loss=style_loss.item(), dis_loss=d_loss.item())
+        #         prof.step()
+        #         if batch_idx >= 10:
+        #             break
+        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+                pbar.set_postfix(loss=loss_total.item(), style_loss=style_loss.item(), dis_loss=d_loss.item(), mel_l1=mel_l1.item())
         
         scheduler_g.step()
         scheduler_se.step()
         scheduler_de.step()
         steps+=1
         
+        if steps % checkpoint_interval == 0 and steps != 0:
+            full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
 
 
         print(f"🔹Step: {steps}, Эпоха: [{epoch+1}/{epochs}], g_only: {epoch_loss_g_only / len(dataloader):.7f}, loss: {epoch_loss_only / len(dataloader):.7f}")
@@ -208,5 +225,5 @@ if __name__ == "__main__":
         use_cache=True
     )
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
-    dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)
-    train_vocoder(h, dataloader, dataset, "./checkpoints", epochs=10)
+    dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
+    train_vocoder(h, dataloader, "./checkpoints", epochs=71)

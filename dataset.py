@@ -190,9 +190,9 @@ class AudioDataset(Dataset):
         )
     
     def __getitem__(self, idx):
-        if self._use_cache:
-            return self.__getitem__cache(idx)
-        return self.__getitem__no_cache(idx)
+        #if self._use_cache:
+        return self.__getitem__cache(idx)
+        #return self.__getitem__no_cache(idx)
 
     # NO CACHE
     def __getitem__no_cache(self, idx):
@@ -224,9 +224,9 @@ class AudioDataset(Dataset):
             f2_name, f1_name = f1_name, f2_name
             frequencies_f1, frequencies_f2 = frequencies_f2, frequencies_f1
 
-        f1 = self.cache_dataset[f1_name][pos].to(self.device)
-        f2 = self.cache_dataset[f2_name][pos].to(self.device)
+        f1 = self.cache_dataset[f1_name][pos]#.to(self.device)
+        f2 = self.cache_dataset[f2_name][pos]#.to(self.device)
 
-        ideal = random.choice(self.mel_ideal_cache[freq_to_note(frequencies_f2[0])]).to(self.device)
+        ideal = random.choice(self.mel_ideal_cache[freq_to_note(frequencies_f2[0])])#.to(self.device)
         
-        return f1, f2, ideal, torch.tensor(frequencies_f2[0]).to(self.device)
+        return f1, f2, ideal, torch.tensor(frequencies_f2[0]).cpu()#.to(self.device)

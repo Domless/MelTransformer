@@ -93,7 +93,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
             resampler = T.Resample(orig_freq=file_sr, new_freq=h.sampling_rate)
             waveform = resampler(waveform)
         waveform = torchaudio.functional.lowpass_biquad(waveform, h.sampling_rate, 1500)[:, :waveform.shape[1]//2]
-
+        print(waveform.shape)
         if os_path.exists(ideals_file):
             f0_ideals = numpy.load(ideals_file, allow_pickle=True).flat[0]
         else:
@@ -115,17 +115,18 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         x = mel_tranform.prepare(chunks).permute(0, 2, 1).to(device)
         y_mel = tr_generator(x, dec_inp)
 
-        # Склеим по временной оси
+        # # Склеим по временной оси
         mel_reshaped = y_mel.reshape(-1, 80)  # [chunks * 40, 80]
+        print(mel_reshaped.shape)
 
-        # Теперь разобьём на отрезки длиной 33
-        total_frames = mel_reshaped.shape[0]
-        n_chunks = total_frames // 33
+        # # Теперь разобьём на отрезки длиной 33
+        # total_frames = mel_reshaped.shape[0]
+        # n_chunks = total_frames // 33
 
-        mel_chunks = mel_reshaped[:n_chunks * 33]  # Обрезаем лишнее, если есть
-        mel_chunks = mel_chunks.view(n_chunks, 33, 80).permute(0, 2, 1)  # [n_chunks, 80, 33]
+        # mel_chunks = mel_reshaped[:n_chunks * 33]  # Обрезаем лишнее, если есть
+        # mel_chunks = mel_chunks.view(n_chunks, 33, 80).permute(0, 2, 1)  # [n_chunks, 80, 33]
 
-        y_res = hifi_gan(mel_chunks)#[:, :, :chunks.shape[1]]
+        y_res = hifi_gan(mel_reshaped.unsqueeze(0).permute(0, 2, 1))#[:, :, :chunks.shape[1]]
 
         audio_s = y_res.squeeze().reshape(1, -1)
         audio_s = torchaudio.functional.lowpass_biquad(audio_s, h.sampling_rate, 1500)
@@ -148,8 +149,8 @@ def main():
         "./../prepare/data/ideals/1.wav",
         200,
         "./../UNIVERSAL_V1/g_02500000", 
-        "./ch_11025/tr_00000033", 
-        "./ch_11025/se_00000033", 
+        "./checkpoints/tr_00000074", 
+        "./checkpoints/se_00000074", 
         "./../prepare/data/ideals_",
         "./cache/ideals.npy",
         )
