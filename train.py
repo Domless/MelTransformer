@@ -9,7 +9,7 @@ from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from models import MelTransformer, MelPerceptualLoss, MelDiscriminator, MelTransformer2
-from modules.style_encoder import StyleEncoder, SpecDiscriminator, GeneratorLoss, DiscriminatorLoss
+from modules.style_encoder import StyleEncoder, MultiResSpecDiscriminator, GeneratorLoss, DiscriminatorLoss
 
 from dataset import AudioDataset
 from utils.pitch import f0_to_coarse
@@ -72,7 +72,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     # perceptual_loss_fn = MelPerceptualLoss().to(device)
     # discriminator = MelDiscriminator().to(device)
     style_encoder = StyleEncoder(dim_in=h.dim_in, style_dim=h.style_dim, max_conv_dim=h.hidden_dim).to(device)
-    spec_d = SpecDiscriminator().to(device)
+    spec_d = MultiResSpecDiscriminator().to(device)
 
 
     pitch_embed = torch.nn.Embedding(300, 256, padding_idx=0).to(device)
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     # 🔹 Загружаем данные и запускаем обучение
     h = get_config("./configs/v1.json")
     dataset = AudioDataset(
-        "./../prepare/datasets/set_augs", 
+        "./../prepare/datasets/set_augs_2", 
         "./../prepare/data/ideals_",
         device, 
         h,

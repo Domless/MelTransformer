@@ -186,6 +186,7 @@ class ResBlock2(torch.nn.Module):
             remove_weight_norm(l)
 
 
+LRELU_SLOPE = 0.1
 def conv_block(in_channels, out_channels, kernel_size=3, padding=1):
     return nn.Sequential(
         spectral_norm(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
