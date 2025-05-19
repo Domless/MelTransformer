@@ -185,3 +185,86 @@ class ResBlock2(torch.nn.Module):
         for l in self.convs:
             remove_weight_norm(l)
 
+
+def conv_block(in_channels, out_channels, kernel_size=3, padding=1):
+    return nn.Sequential(
+        spectral_norm(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
+        #nn.BatchNorm1d(out_channels),
+        nn.LeakyReLU(inplace=True)
+    )
+
+def deconv_block(in_channels, out_channels, kernel_size=3, padding=1):
+    return nn.Sequential(
+        spectral_norm(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
+        #nn.BatchNorm1d(out_channels),
+        nn.LeakyReLU(inplace=True)
+    )
+
+class MelTransformer2(nn.Module):
+    def __init__(self, mel_dim=80, hidden_dim=256, ideal_dim=256, num_layers=4, nhead=4, is_mel_ideal=False):
+        super().__init__()
+
+        # Входная сверточная последовательность
+        self.mel_conv = nn.Sequential(
+            conv_block(mel_dim, hidden_dim//2),
+            conv_block(hidden_dim//2, hidden_dim)
+        )
+
+        if is_mel_ideal:
+            self.ideal_conv = nn.Sequential(
+                conv_block(mel_dim, hidden_dim//2),
+                conv_block(hidden_dim//2, hidden_dim)
+            )
+        else:
+            self.ideal_conv = nn.Sequential(
+                conv_block(ideal_dim, hidden_dim//2),
+                conv_block(hidden_dim//2, hidden_dim)
+            )
+
+        # Трансформеры
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4
+        )
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+
+        # Выходная обратная сверточная последовательность
+        self.output_deconv = nn.Sequential(
+            conv_block(hidden_dim, hidden_dim//2, 3, 1),
+            nn.Conv1d(hidden_dim//2, mel_dim, kernel_size=1, padding=0)
+            #nn.ConvTranspose1d(hidden_dim//2, mel_dim, kernel_size=3, padding=1)
+        )
+
+        #self.final = nn.Linear(mel_dim, mel_dim)
+
+    def forward(self, mel_input, ideal_input):
+        """
+        mel_input: [B, T, mel_dim]
+        ideal_input: [B, T, mel_dim] or [B, T, ideal_dim]
+        """
+        # Преобразование для Conv1d: [B, T, C] → [B, C, T]
+        mel_input = mel_input.transpose(1, 2)
+        mel_embed = self.mel_conv(mel_input)  # [B, hidden_dim, T]
+
+        ideal_input = ideal_input.transpose(1, 2)
+        ideal_embed = self.ideal_conv(ideal_input)  # [B, hidden_dim, T]
+
+        # Для Transformer: [B, C, T] → [B, T, C]
+        mel_embed = mel_embed.transpose(1, 2)
+        ideal_embed = ideal_embed.transpose(1, 2)
+
+        memory = self.encoder(ideal_embed)
+        output = self.decoder(mel_embed, memory)
+
+        # Назад для ConvTranspose1d: [B, T, C] → [B, C, T]
+        output = output.transpose(1, 2)
+        mel_out = self.output_deconv(output)  # [B, mel_dim, T]
+
+        # Финальный выход: [B, C, T] → [B, T, C]
+        mel_out = mel_out.transpose(1, 2)
+        #mel_out = self.final(mel_out)  # B × T × mel_dim
+        return mel_out

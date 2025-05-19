@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-from models import MelTransformer, MelPerceptualLoss, MelDiscriminator
+from models import MelTransformer, MelPerceptualLoss, MelDiscriminator, MelTransformer2
 from modules.style_encoder import StyleEncoder, SpecDiscriminator, GeneratorLoss, DiscriminatorLoss
 
 from dataset import AudioDataset
@@ -66,8 +66,8 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     # generator = MelTransformer2(
     #     hidden_dim=128, num_layers=6, nhead=32, ideal_dim=128, is_mel_ideal=True
     # ).to(device)
-    generator = MelTransformer(
-        hidden_dim=256, num_layers=6, nhead=32, ideal_dim=256, is_mel_ideal=False
+    generator = MelTransformer2(
+        hidden_dim=256, num_layers=4, nhead=16, ideal_dim=256, is_mel_ideal=False
     ).to(device)
     # perceptual_loss_fn = MelPerceptualLoss().to(device)
     # discriminator = MelDiscriminator().to(device)
@@ -232,4 +232,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints", epochs=104, checkpoint_interval=15)
+    train_vocoder(h, dataloader, "./checkpoints", epochs=1, checkpoint_interval=15)
