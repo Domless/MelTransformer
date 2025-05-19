@@ -193,20 +193,18 @@ LRELU_SLOPE = 0.1
 class SpecDiscriminator(nn.Module):
     """docstring for Discriminator."""
 
-    def __init__(self):
-        super(SpecDiscriminator, self).__init__()
+    def __init__(self, kernel_size=(3,9), stride=(1,2)):
+        super().__init__()
         self.discriminators = nn.ModuleList([
-            spectral_norm(nn.Conv2d(1, 32, kernel_size=(3, 9), padding=(1, 4))),
-            spectral_norm(nn.Conv2d(32, 32, kernel_size=(3, 9), stride=(1,2), padding=(1, 4))),
-            spectral_norm(nn.Conv2d(32, 32, kernel_size=(3, 9), stride=(1,2), padding=(1, 4))),
-            spectral_norm(nn.Conv2d(32, 32, kernel_size=(3, 9), stride=(1,2), padding=(1, 4))),
-            spectral_norm(nn.Conv2d(32, 32, kernel_size=(3, 3), stride=(1,1), padding=(1, 1))),
+            spectral_norm(nn.Conv2d(1, 32, kernel_size=kernel_size, padding=(kernel_size[0]//2, kernel_size[1]//2))),
+            spectral_norm(nn.Conv2d(32, 32, kernel_size=kernel_size, stride=stride, padding=(kernel_size[0]//2, kernel_size[1]//2))),
+            spectral_norm(nn.Conv2d(32, 32, kernel_size=kernel_size, stride=stride, padding=(kernel_size[0]//2, kernel_size[1]//2))),
+            spectral_norm(nn.Conv2d(32, 32, kernel_size=kernel_size, stride=stride, padding=(kernel_size[0]//2, kernel_size[1]//2))),
+            spectral_norm(nn.Conv2d(32, 32, kernel_size=(3,3), stride=(1,1), padding=(1,1))),
         ])
-
         self.out = spectral_norm(nn.Conv2d(32, 1, 3, 1, 1))
 
-    def _forward(self, y):
-
+    def forward(self, y):
         fmap = []
         y = y.unsqueeze(1)
         for i, d in enumerate(self.discriminators):
@@ -219,18 +217,28 @@ class SpecDiscriminator(nn.Module):
 
         return torch.flatten(y, 1, -1), fmap
     
+    
+class MultiResSpecDiscriminator(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.discriminators = nn.ModuleList([
+            SpecDiscriminator(kernel_size=(3,9), stride=(1,2)),
+            SpecDiscriminator(kernel_size=(5,15), stride=(1,3)),
+            #SpecDiscriminator(kernel_size=(3,5), stride=(1,1)),
+        ])
+
     def forward(self, y, y_hat):
         y_d_rs = []
         y_d_gs = []
         fmap_rs = []
         fmap_gs = []
-
-        y_d_r, fmap_r = self._forward(y)
-        y_d_g, fmap_g = self._forward(y_hat)
-        y_d_rs.append(y_d_r)
-        fmap_rs.append(fmap_r)
-        y_d_gs.append(y_d_g)
-        fmap_gs.append(fmap_g)
+        for i, d in enumerate(self.discriminators):
+            y_d_r, fmap_r = d(y)
+            y_d_g, fmap_g = d(y_hat)
+            y_d_rs.append(y_d_r)
+            fmap_rs.append(fmap_r)
+            y_d_gs.append(y_d_g)
+            fmap_gs.append(fmap_g)
 
         return y_d_rs, y_d_gs, fmap_rs, fmap_gs
 
