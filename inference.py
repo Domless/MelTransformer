@@ -116,7 +116,8 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         y_mel = tr_generator(x, dec_inp)
 
         # # Склеим по временной оси
-        mel_reshaped = y_mel.reshape(-1, 80)  # [chunks * 40, 80]
+        mel_reshaped = y_mel
+        #mel_reshaped = y_mel.reshape(-1, 80).unsqueeze(0)  # [chunks * 40, 80]
         print(mel_reshaped.shape)
 
         # # Теперь разобьём на отрезки длиной 33
@@ -126,7 +127,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         # mel_chunks = mel_reshaped[:n_chunks * 33]  # Обрезаем лишнее, если есть
         # mel_chunks = mel_chunks.view(n_chunks, 33, 80).permute(0, 2, 1)  # [n_chunks, 80, 33]
 
-        y_res = hifi_gan(mel_reshaped.unsqueeze(0).permute(0, 2, 1))#[:, :, :chunks.shape[1]]
+        y_res = hifi_gan(mel_reshaped.permute(0, 2, 1))#[:, :, :chunks.shape[1]]
 
         audio_s = y_res.squeeze().reshape(1, -1)
         audio_s = torchaudio.functional.lowpass_biquad(audio_s, h.sampling_rate, 1500)
@@ -149,10 +150,10 @@ def main():
     inference(
         h,
         "./../prepare/data/ideals/1.wav",
-        150,
+        200,
         "./../UNIVERSAL_V1/g_02500000", 
-        "./checkpoints/tr_00000029", 
-        "./checkpoints/se_00000029", 
+        "./checkpoints/tr_00000044", 
+        "./checkpoints/se_00000044", 
         "./../prepare/data/ideals_",
         "./cache/ideals.npy",
         )

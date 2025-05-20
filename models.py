@@ -224,12 +224,12 @@ class MelTransformer2(nn.Module):
 
         # Трансформеры
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4
+            d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4, #activation=F.leaky_relu
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         decoder_layer = nn.TransformerDecoderLayer(
-            d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4
+            d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4, #activation=F.leaky_relu
         )
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
 
@@ -237,10 +237,8 @@ class MelTransformer2(nn.Module):
         self.output_deconv = nn.Sequential(
             conv_block(hidden_dim, hidden_dim//2, 3, 1),
             nn.Conv1d(hidden_dim//2, mel_dim, kernel_size=1, padding=0)
-            #nn.ConvTranspose1d(hidden_dim//2, mel_dim, kernel_size=3, padding=1)
         )
 
-        #self.final = nn.Linear(mel_dim, mel_dim)
 
     def forward(self, mel_input, ideal_input):
         """
@@ -267,5 +265,4 @@ class MelTransformer2(nn.Module):
 
         # Финальный выход: [B, C, T] → [B, T, C]
         mel_out = mel_out.transpose(1, 2)
-        #mel_out = self.final(mel_out)  # B × T × mel_dim
         return mel_out

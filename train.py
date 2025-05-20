@@ -155,6 +155,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 x, y, ideal, note = batch
                 x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
                 x, y = x.permute(0, 2, 1), y.permute(0, 2, 1)
+                x = y
 
                 #with record_function("forward_pass"):
                 ideal_to = style_encoder(ideal.detach())
@@ -202,15 +203,15 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
 
         print(f"🔹Step: {steps}, Эпоха: [{epoch+1}/{epochs}], g_only: {epoch_loss_g_only / len(dataloader):.7f}, loss: {epoch_loss_only / len(dataloader):.7f}")
     print("✅ Обучение завершено! Сохраняем модель...")
-    # for idx, d in enumerate(y_g_hat):
-    #     plot_spectrograms__(
-    #         [
-    #             x[idx].permute(1, 0).detach().cpu().numpy(), 
-    #             y[idx].permute(1, 0).detach().cpu().numpy(), 
-    #             d.permute(1, 0).detach().cpu().numpy(),
-    #         ], 
-    #         ["x", "y", "res"]
-    #     )
+    for idx, d in enumerate(y_g_hat):
+        plot_spectrograms__(
+            [
+                x[idx].permute(1, 0).detach().cpu().numpy(), 
+                y[idx].permute(1, 0).detach().cpu().numpy(), 
+                d.permute(1, 0).detach().cpu().numpy(),
+            ], 
+            ["x", "y", "res"]
+        )
     full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
 
 def set_seed(seed):
@@ -223,7 +224,8 @@ if __name__ == "__main__":
     # 🔹 Загружаем данные и запускаем обучение
     h = get_config("./configs/v1.json")
     dataset = AudioDataset(
-        "./../prepare/datasets/set_augs_2", 
+        "./../prepare/datasets/set_augs_4", 
+        #"./../prepare/datasets/set_18.05.25", 
         "./../prepare/data/ideals_",
         device, 
         h,
@@ -232,4 +234,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints", epochs=30, checkpoint_interval=15)
+    train_vocoder(h, dataloader, "./checkpoints", epochs=100, checkpoint_interval=15)
