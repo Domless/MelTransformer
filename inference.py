@@ -8,7 +8,7 @@ import torch
 import torchaudio
 import torchaudio.transforms as T
 #from scipy.io.wavfile import write
-from models import MelTransformer
+from models import MelTransformer2
 from modules.style_encoder import StyleEncoder
 
 from utils.frame import VocalData, freq_to_note, load_vocals
@@ -63,8 +63,8 @@ def load_hifi_gan(checkpoint_file, device):
 
 def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_checkpoint, ideals_path, ideals_file = None):
 
-    tr_generator = MelTransformer(
-        hidden_dim=256, num_layers=6, nhead=32, ideal_dim=256, is_mel_ideal=False
+    tr_generator = MelTransformer2(
+        hidden_dim=256, num_layers=4, nhead=16, ideal_dim=256, is_mel_ideal=False
     ).to(device)
     style_encoder = StyleEncoder(dim_in=h.dim_in, style_dim=h.style_dim, max_conv_dim=h.hidden_dim).to(device)
     pitch_embed = torch.nn.Embedding(300, 256, padding_idx=0).to(device)
@@ -134,9 +134,11 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         # for idx, d in enumerate(x):
         #     plot_spectrograms(d.detach().cpu().numpy(), y_mel[idx].detach().cpu().numpy())
         plot_waveforms(waveform.squeeze().cpu().numpy(), audio_s.squeeze().cpu().numpy())
+        print(waveform.squeeze().cpu().numpy().max())
+        print(audio_s.squeeze().cpu().numpy().max())
 
         output_file = wav_path[:-4] +  '_generated_tr.wav'
-        torchaudio.save(output_file, audio_s.cpu(), h.sampling_rate)
+        torchaudio.save(output_file, audio_s.cpu()*2, h.sampling_rate)
 
         print(output_file)
 
@@ -147,10 +149,10 @@ def main():
     inference(
         h,
         "./../prepare/data/ideals/1.wav",
-        200,
+        150,
         "./../UNIVERSAL_V1/g_02500000", 
-        "./checkpoints/tr_00000074", 
-        "./checkpoints/se_00000074", 
+        "./checkpoints/tr_00000029", 
+        "./checkpoints/se_00000029", 
         "./../prepare/data/ideals_",
         "./cache/ideals.npy",
         )

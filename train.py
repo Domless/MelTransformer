@@ -166,7 +166,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
 
             
                 # L1 Mel-Spectrogram Loss
-                mel_l1 = F.l1_loss(y, y_g_hat) * 10
+                mel_l1 = F.l1_loss(y, y_g_hat) * 40
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
                 loss_total = mel_l1 + spec_loss
@@ -232,4 +232,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints", epochs=1, checkpoint_interval=15)
+    train_vocoder(h, dataloader, "./checkpoints", epochs=30, checkpoint_interval=15)
