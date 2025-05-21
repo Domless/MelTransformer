@@ -61,7 +61,7 @@ def full_save(
     )
 
 # 🔹 Функция обучения
-def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7):
+def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None):
     # scaler = GradScaler()
     # generator = MelTransformer2(
     #     hidden_dim=128, num_layers=6, nhead=32, ideal_dim=128, is_mel_ideal=True
@@ -124,6 +124,15 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     if cp_d:
         optim_spec_d.load_state_dict(state_dict_d['optim'])
 
+    if new_learning_rate is not None:
+        for param_group in optim_g.param_groups:
+            param_group['lr'] = new_learning_rate
+        for param_group in optim_se.param_groups:
+            param_group['lr'] = new_learning_rate
+        for param_group in optim_spec_d.param_groups:
+            param_group['lr'] = new_learning_rate
+
+
     g_spec_loss = GeneratorLoss(spec_d).to(device)
     d_spec_loss = DiscriminatorLoss(spec_d).to(device)
 
@@ -136,19 +145,9 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     spec_d.train()
     generator.train()
     style_encoder.train()
-    #torch.autograd.set_detect_anomaly(True)
-    #from torch.profiler import profile, record_function, ProfilerActivity
     for epoch in range(last_epoch+1, epochs):
         epoch_loss_g_only = 0.0
         epoch_loss_only = 0.0
-        # with profile(
-        #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        #         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-        #         on_trace_ready=torch.profiler.tensorboard_trace_handler('./logdir'),
-        #         record_shapes=True,
-        #         with_stack=True
-        # ) as prof:
-        #     for batch_idx, batch in enumerate(dataloader):
         with tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} - Train") as pbar:
             for batch in pbar:
                 # x, y, y_mel = batch
@@ -167,7 +166,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
 
             
                 # L1 Mel-Spectrogram Loss
-                mel_l1 = F.l1_loss(y, y_g_hat) * 40
+                mel_l1 = F.mse_loss(y, y_g_hat) * 100
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
                 loss_total = mel_l1 + spec_loss
@@ -234,4 +233,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints", epochs=100, checkpoint_interval=15)
+    train_vocoder(h, dataloader, "./checkpoints", epochs=200, checkpoint_interval=25, new_learning_rate=0.00001)
