@@ -151,8 +151,8 @@ def main():
         "./../prepare/data/ideals/1.wav",
         150,
         "./../UNIVERSAL_V1/g_02500000", 
-        "./checkpoints/tr_00000029", 
-        "./checkpoints/se_00000029", 
+        "./checkpoints/tr_00000056", 
+        "./checkpoints/se_00000056", 
         "./../prepare/data/ideals_",
         "./cache/ideals.npy",
         )

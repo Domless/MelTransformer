@@ -61,25 +61,17 @@ def full_save(
     )
 
 # 🔹 Функция обучения
-def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7):
-    # scaler = GradScaler()
-    # generator = MelTransformer2(
-    #     hidden_dim=128, num_layers=6, nhead=32, ideal_dim=128, is_mel_ideal=True
-    # ).to(device)
+def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None):
+
     generator = MelTransformer2(
         hidden_dim=256, num_layers=4, nhead=16, ideal_dim=256, is_mel_ideal=False
     ).to(device)
-    # perceptual_loss_fn = MelPerceptualLoss().to(device)
-    # discriminator = MelDiscriminator().to(device)
+
     style_encoder = StyleEncoder(dim_in=h.dim_in, style_dim=h.style_dim, max_conv_dim=h.hidden_dim).to(device)
     spec_d = MultiResSpecDiscriminator().to(device)
 
 
     pitch_embed = torch.nn.Embedding(300, 256, padding_idx=0).to(device)
-
-    # generator = torch.compile(generator)
-    # style_encoder = torch.compile(style_encoder)
-    # spec_d = torch.compile(spec_d)
 
     cp_g, cp_se, cp_d = None, None, None
 
@@ -124,6 +116,14 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     if cp_d:
         optim_spec_d.load_state_dict(state_dict_d['optim'])
 
+    if new_learning_rate is not None:
+        for param_group in optim_g.param_groups:
+            param_group['lr'] = new_learning_rate
+        for param_group in optim_se.param_groups:
+            param_group['lr'] = new_learning_rate
+        for param_group in optim_spec_d.param_groups:
+            param_group['lr'] = new_learning_rate
+
     g_spec_loss = GeneratorLoss(spec_d).to(device)
     d_spec_loss = DiscriminatorLoss(spec_d).to(device)
 
@@ -136,19 +136,11 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     spec_d.train()
     generator.train()
     style_encoder.train()
-    #torch.autograd.set_detect_anomaly(True)
-    #from torch.profiler import profile, record_function, ProfilerActivity
+
     for epoch in range(last_epoch+1, epochs):
         epoch_loss_g_only = 0.0
         epoch_loss_only = 0.0
-        # with profile(
-        #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        #         schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-        #         on_trace_ready=torch.profiler.tensorboard_trace_handler('./logdir'),
-        #         record_shapes=True,
-        #         with_stack=True
-        # ) as prof:
-        #     for batch_idx, batch in enumerate(dataloader):
+
         with tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} - Train") as pbar:
             for batch in pbar:
                 # x, y, y_mel = batch
@@ -166,7 +158,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
 
             
                 # L1 Mel-Spectrogram Loss
-                mel_l1 = F.l1_loss(y, y_g_hat) * 40
+                mel_l1 = F.l1_loss(y, y_g_hat) * 100
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
                 loss_total = mel_l1 + spec_loss
@@ -185,10 +177,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 optim_se.step()
 
                 epoch_loss_g_only += loss_total.item()
-        #         prof.step()
-        #         if batch_idx >= 10:
-        #             break
-        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
                 pbar.set_postfix(loss=loss_total.item(), style_loss=style_loss.item(), dis_loss=d_loss.item(), mel_l1=mel_l1.item())
         
         scheduler_g.step()
@@ -232,4 +221,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints", epochs=30, checkpoint_interval=15)
+    train_vocoder(h, dataloader, "./checkpoints", epochs=56, checkpoint_interval=15)#, new_learning_rate=0.0001)
