@@ -106,14 +106,17 @@ class AudioDataset(Dataset):
             h,
             with_shift=False,
             use_cache=False,
-            cahce_folder = "./cache"
+            cahce_folder = "./cache",
+            with_wav=False
         ):
         cache_ideals_file = f"{cahce_folder}/ideals.npy"
         cache_dataset_file = f"{cahce_folder}/data.npy"
+        cache_wav_file = f"{cahce_folder}/wav.npy"
 
         self.device = device
-        self.with_shift = with_shift
+        self._with_shift = with_shift
         self._use_cache = use_cache
+        self._with_wav = with_wav
 
         self.sr=h.sampling_rate
         self.n_fft = h.n_fft
@@ -150,10 +153,15 @@ class AudioDataset(Dataset):
                 numpy.save(cache_dataset_file, self.cache_dataset)
                 self.wavs = None
                 #del self.wavs
-        else:
-            self.wavs = self.load_wavs(
-                folder_path + "/wav", self.framesamp, self.voice_min_hz, self.voice_max_hz, self.sr
-            )
+        
+        if not self._use_cache or self._with_wav:
+            if os_path.exists(cache_wav_file):
+                self.wavs = numpy.load(cache_wav_file, allow_pickle=True).flat[0]
+            else:
+                self.wavs = self.load_wavs(
+                    folder_path + "/wav", self.framesamp, self.voice_min_hz, self.voice_max_hz, self.sr
+                )
+                numpy.save(cache_wav_file, self.wavs)
 
         # if self.with_shift:
         #     self.create_cache_shift()
@@ -229,4 +237,6 @@ class AudioDataset(Dataset):
 
         ideal = random.choice(self.mel_ideal_cache[freq_to_note(frequencies_f2[0])])#.to(self.device)
         
-        return f1, f2, ideal, torch.tensor(frequencies_f2[0]).cpu()#.to(self.device)
+        if not self._with_wav:
+            return f1, f2, ideal, torch.tensor(frequencies_f2[0]).cpu()#.to(self.device)
+        return f1, f2, ideal, torch.tensor(frequencies_f2[0]).cpu(), self.wavs[f2_name][pos]

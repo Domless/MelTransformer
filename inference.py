@@ -92,7 +92,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         if h.sampling_rate != file_sr:
             resampler = T.Resample(orig_freq=file_sr, new_freq=h.sampling_rate)
             waveform = resampler(waveform)
-        waveform = torchaudio.functional.lowpass_biquad(waveform, h.sampling_rate, 1500)[:, :waveform.shape[1]//2]
+        waveform = torchaudio.functional.lowpass_biquad(waveform, h.sampling_rate, 1500)#[:, 8192*10:8192*15]
         print(waveform.shape)
         if os_path.exists(ideals_file):
             f0_ideals = numpy.load(ideals_file, allow_pickle=True).flat[0]
@@ -103,20 +103,31 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         target_tensors = pitch_embed(f0_to_coarse(torch.tensor(target).to(device)))
         note = freq_to_note(target)
 
-        num_chunks = waveform.shape[1] // chunk_size
-        chunks = waveform[:, :num_chunks * chunk_size].reshape(1, num_chunks, chunk_size).squeeze(0).to(device)
+        #num_chunks = waveform.shape[1] // chunk_size
+        #chunks = waveform[:, :num_chunks * chunk_size].reshape(1, num_chunks, chunk_size).squeeze(0).to(device)
 
         ideal = torch.Tensor(random.choice(f0_ideals[note])).to(device)
-        ideal = mel_tranform.prepare(ideal).unsqueeze(0).permute(0, 2, 1).to(device)
+        ideal = mel_tranform.prepare(ideal).unsqueeze(0).to(device)
         ideal = style_encoder(ideal)
         dec_inp = torch.stack([target_tensors.unsqueeze(0), ideal.squeeze(1)], 1)
-        dec_inp = dec_inp.expand(chunks.shape[0], -1, -1)
+        
 
-        x = mel_tranform.prepare(chunks).permute(0, 2, 1).to(device)
-        y_mel = tr_generator(x, dec_inp)
+        #x = mel_tranform.prepare(chunks).permute(0, 2, 1).to(device)
+
+
+        mel_orig = mel_tranform.prepare(waveform.to(device)).permute(0, 2, 1).to(device)
+        num_chunks = mel_orig.shape[1] // 29
+        mel_chunks = mel_orig[:, :num_chunks * 29, :].reshape(num_chunks, 29, 80).to(device)
+        
+        #print(x.shape)
+        dec_inp = dec_inp.expand(mel_chunks.shape[0], -1, -1)
+        y_mel = tr_generator(mel_chunks, dec_inp)
 
         # # Склеим по временной оси
-        mel_reshaped = y_mel.reshape(-1, 80)  # [chunks * 40, 80]
+        #mel_reshaped = y_mel.reshape(-1, 80).unsqueeze(0)  # [chunks * 40, 80]
+        mel_reshaped = y_mel
+        #mel_reshaped = x.reshape(-1, 80).unsqueeze(0)  # [chunks * 40, 80]
+        #mel_reshaped = x
         print(mel_reshaped.shape)
 
         # # Теперь разобьём на отрезки длиной 33
@@ -126,7 +137,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         # mel_chunks = mel_reshaped[:n_chunks * 33]  # Обрезаем лишнее, если есть
         # mel_chunks = mel_chunks.view(n_chunks, 33, 80).permute(0, 2, 1)  # [n_chunks, 80, 33]
 
-        y_res = hifi_gan(mel_reshaped.unsqueeze(0).permute(0, 2, 1))#[:, :, :chunks.shape[1]]
+        y_res = hifi_gan(mel_reshaped.permute(0, 2, 1))#[:, :, :chunks.shape[1]]
 
         audio_s = y_res.squeeze().reshape(1, -1)
         audio_s = torchaudio.functional.lowpass_biquad(audio_s, h.sampling_rate, 1500)
@@ -138,7 +149,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         print(audio_s.squeeze().cpu().numpy().max())
 
         output_file = wav_path[:-4] +  '_generated_tr.wav'
-        torchaudio.save(output_file, audio_s.cpu()*2, h.sampling_rate)
+        torchaudio.save(output_file, audio_s.cpu(), h.sampling_rate)
 
         print(output_file)
 
@@ -149,10 +160,10 @@ def main():
     inference(
         h,
         "./../prepare/data/ideals/1.wav",
-        150,
+        200,
         "./../UNIVERSAL_V1/g_02500000", 
-        "./checkpoints/tr_00000056", 
-        "./checkpoints/se_00000056", 
+        "./checkpoints/tr_00000076", 
+        "./checkpoints/se_00000076", 
         "./../prepare/data/ideals_",
         "./cache/ideals.npy",
         )

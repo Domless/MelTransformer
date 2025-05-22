@@ -142,7 +142,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
         epoch_loss_only = 0.0
 
         with tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} - Train") as pbar:
-            for batch in pbar:
+            for idx, batch in enumerate(pbar, 1):
                 # x, y, y_mel = batch
                 x, y, ideal, note = batch
                 x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
@@ -178,7 +178,13 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
 
                 epoch_loss_g_only += loss_total.item()
 
-                pbar.set_postfix(loss=loss_total.item(), style_loss=style_loss.item(), dis_loss=d_loss.item(), mel_l1=mel_l1.item())
+                pbar.set_postfix(
+                    loss=loss_total.item(), 
+                    style_loss=style_loss.item(), 
+                    dis_loss=d_loss.item(), 
+                    mel_l1=mel_l1.item(), 
+                    d_mel_l1=epoch_loss_only/idx
+                )
         
         scheduler_g.step()
         scheduler_se.step()
@@ -191,15 +197,15 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
 
         print(f"🔹Step: {steps}, Эпоха: [{epoch+1}/{epochs}], g_only: {epoch_loss_g_only / len(dataloader):.7f}, loss: {epoch_loss_only / len(dataloader):.7f}")
     print("✅ Обучение завершено! Сохраняем модель...")
-    # for idx, d in enumerate(y_g_hat):
-    #     plot_spectrograms__(
-    #         [
-    #             x[idx].permute(1, 0).detach().cpu().numpy(), 
-    #             y[idx].permute(1, 0).detach().cpu().numpy(), 
-    #             d.permute(1, 0).detach().cpu().numpy(),
-    #         ], 
-    #         ["x", "y", "res"]
-    #     )
+    for idx, d in enumerate(y_g_hat):
+        plot_spectrograms__(
+            [
+                x[idx].permute(1, 0).detach().cpu().numpy(), 
+                y[idx].permute(1, 0).detach().cpu().numpy(), 
+                d.permute(1, 0).detach().cpu().numpy(),
+            ], 
+            ["x", "y", "res"]
+        )
     full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
 
 def set_seed(seed):
@@ -221,4 +227,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints", epochs=56, checkpoint_interval=15)#, new_learning_rate=0.0001)
+    train_vocoder(h, dataloader, "./checkpoints", epochs=76, checkpoint_interval=20, new_learning_rate=0.00004)
