@@ -208,16 +208,16 @@ def train_vocoder(dataloader, h, checkpoint_path, tr_h, tr_checkpoint_path, epoc
     print("✅ Обучение завершено! Сохраняем модель...")
     path = "{}/g_{:08d}".format(checkpoint_path, steps)
     save_checkpoint(path, {'generator': generator.state_dict()})
-    path = "{}/do_{:08d}".format(checkpoint_path, steps)
-    save_checkpoint(path, {
-                'mpd': mpd.state_dict(),
-                'msd': msd.state_dict(),
-                'optim_g': optim_g.state_dict(), 
-                'optim_d': optim_d.state_dict(), 
-                'steps': steps,
-                'epoch': epoch
-                }
-            )
+    # path = "{}/do_{:08d}".format(checkpoint_path, steps)
+    # save_checkpoint(path, {
+    #             'mpd': mpd.state_dict(),
+    #             'msd': msd.state_dict(),
+    #             'optim_g': optim_g.state_dict(), 
+    #             'optim_d': optim_d.state_dict(), 
+    #             'steps': steps,
+    #             'epoch': epoch
+    #             }
+    #         )
 
 
 def set_seed(seed):

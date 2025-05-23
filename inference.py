@@ -23,7 +23,7 @@ from utils.utils import (
     load_checkpoint, 
     prepare_and_save_checkpoints, 
     get_config, 
-    plot_waveform, 
+    plot_spectrograms__, 
     plot_waveforms,
     AttrDict
 )
@@ -124,10 +124,17 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         y_mel = tr_generator(mel_chunks, dec_inp)
 
         # # Склеим по временной оси
-        #mel_reshaped = y_mel.reshape(-1, 80).unsqueeze(0)  # [chunks * 40, 80]
-        mel_reshaped = y_mel
+        mel_reshaped = y_mel.reshape(-1, 80).unsqueeze(0)  # [chunks * 40, 80]
+        #mel_reshaped = y_mel
         #mel_reshaped = x.reshape(-1, 80).unsqueeze(0)  # [chunks * 40, 80]
         #mel_reshaped = x
+        plot_spectrograms__(
+            [
+                mel_orig.squeeze(0).permute(1, 0).detach().cpu().numpy(), 
+                mel_reshaped.squeeze(0).permute(1, 0).detach().cpu().numpy(), 
+            ], 
+            ["x", "y"]
+        )
         print(mel_reshaped.shape)
 
         # # Теперь разобьём на отрезки длиной 33
@@ -149,7 +156,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         print(audio_s.squeeze().cpu().numpy().max())
 
         output_file = wav_path[:-4] +  '_generated_tr.wav'
-        torchaudio.save(output_file, audio_s.cpu(), h.sampling_rate)
+        torchaudio.save(output_file, audio_s.cpu()*2, h.sampling_rate)
 
         print(output_file)
 
@@ -161,7 +168,7 @@ def main():
         h,
         "./../prepare/data/ideals/1.wav",
         200,
-        "./../UNIVERSAL_V1/g_02500000", 
+        "./checkpoints_hifi/g_02500002", 
         "./checkpoints/tr_00000076", 
         "./checkpoints/se_00000076", 
         "./../prepare/data/ideals_",
