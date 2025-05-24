@@ -190,18 +190,8 @@ def train_vocoder(dataloader, h, checkpoint_path, tr_h, tr_checkpoint_path, epoc
         print("Learning rate:", scheduler_g.get_last_lr())
 
         if steps % checkpoint_interval == 0 and steps != 0:
-            checkpoint_path = "{}/g_{:08d}".format(checkpoint_path, steps)
-            save_checkpoint(checkpoint_path, {'generator': generator.state_dict()})
-            checkpoint_path = "{}/do_{:08d}".format(checkpoint_path, steps)
-            save_checkpoint(checkpoint_path, {
-                'mpd': mpd.state_dict(),
-                'msd': msd.state_dict(),
-                'optim_g': optim_g.state_dict(), 
-                'optim_d': optim_d.state_dict(), 
-                'steps': steps,
-                'epoch': epoch
-                }
-            )
+            path = "{}/g_{:08d}".format(checkpoint_path, steps)
+            save_checkpoint(path, {'generator': generator.state_dict()})
 
 
         print(f"🔹Step: {steps}, Эпоха: [{epoch+1}/{epochs}], loss: {epoch_loss_only / len(dataloader):.7f}")
