@@ -259,7 +259,9 @@ class MelTransformer2(nn.Module):
         ideal_embed = ideal_embed.transpose(1, 2)
 
         memory = self.encoder(ideal_embed)
+        memory= F.leaky_relu(memory, LRELU_SLOPE)
         output = self.decoder(mel_embed, memory)
+        output= F.leaky_relu(output, LRELU_SLOPE)
 
         # Назад для ConvTranspose1d: [B, T, C] → [B, C, T]
         output = output.transpose(1, 2)

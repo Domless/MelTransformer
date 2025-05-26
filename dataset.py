@@ -232,10 +232,24 @@ class AudioDataset(Dataset):
             f2_name, f1_name = f1_name, f2_name
             frequencies_f1, frequencies_f2 = frequencies_f2, frequencies_f1
 
-        f1 = self.cache_dataset[f1_name][pos]#.to(self.device)
-        f2 = self.cache_dataset[f2_name][pos]#.to(self.device)
+        f1 = self.cache_dataset[f1_name][pos]+11.5129#.to(self.device) 
+        f2 = self.cache_dataset[f2_name][pos]+11.5129#.to(self.device)
+        f1_max, f2_max = f1.max(), f2.max()
+        if f1_max < f2_max:
+            f1 = f1 * (f2_max/f1_max)
+        else:
+            f2 = f2 * (f1_max/f2_max)
 
-        ideal = random.choice(self.mel_ideal_cache[freq_to_note(frequencies_f2[0])])#.to(self.device)
+        f1 = f1-11.5129#.to(self.device) 
+        f2 = f2-11.5129#.to(self.device)
+        # print(f1.max(), f1.min())
+        # print(f2.max(), f2.min())
+
+        try:
+            ideal = random.choice(self.mel_ideal_cache[freq_to_note(frequencies_f2[0])])#.to(self.device)
+        except Exception as e:
+            print(freq_to_note(frequencies_f2[0]))
+            raise e
         
         if not self._with_wav:
             return f1, f2, ideal, torch.tensor(frequencies_f2[0]).cpu()#.to(self.device)

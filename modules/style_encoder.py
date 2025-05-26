@@ -224,7 +224,7 @@ class MultiResSpecDiscriminator(nn.Module):
         self.discriminators = nn.ModuleList([
             SpecDiscriminator(kernel_size=(3,9), stride=(1,2)),
             SpecDiscriminator(kernel_size=(5,15), stride=(1,3)),
-            #SpecDiscriminator(kernel_size=(3,5), stride=(1,1)),
+            SpecDiscriminator(kernel_size=(3,5), stride=(1,1)),
         ])
 
     def forward(self, y, y_hat):

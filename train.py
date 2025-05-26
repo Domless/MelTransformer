@@ -22,6 +22,8 @@ from utils.utils import (
     get_config, 
     save_checkpoint
 )
+import matplotlib.pyplot as plt
+
 
 torch.set_float32_matmul_precision('high')
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -137,31 +139,35 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     generator.train()
     style_encoder.train()
 
+
+    # Инициализация списков для хранения лоссов
+    losses_total = []
+    losses_mel = []
+    losses_style = []
+    losses_dis = []
+
     for epoch in range(last_epoch+1, epochs):
         epoch_loss_g_only = 0.0
         epoch_loss_only = 0.0
+        epoch_style_loss = 0.0
+        epoch_d_loss = 0.0
 
         with tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} - Train") as pbar:
             for idx, batch in enumerate(pbar, 1):
-                # x, y, y_mel = batch
                 x, y, ideal, note = batch
                 x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
                 x, y = x.permute(0, 2, 1), y.permute(0, 2, 1)
 
-                #with record_function("forward_pass"):
                 ideal_to = style_encoder(ideal.detach())
                 pitch_emb = pitch_embed(f0_to_coarse(note))
-                    #x, y, z = x.to(device), y.to(device), z.to(device)
                 dec_inp = torch.stack([pitch_emb, ideal_to.detach().squeeze(1)], 1)
-                y_g_hat = generator(x, dec_inp)#[:, :, :y.shape[2]]
+                y_g_hat = generator(x, dec_inp)
                 gen_ideal = style_encoder(y.detach().permute(0, 2, 1))
 
-            
-                # L1 Mel-Spectrogram Loss
-                mel_l1 = F.mse_loss(y, y_g_hat) * 75 + F.l1_loss(y, y_g_hat) * 25
+                mel_l1 = F.mse_loss(y, y_g_hat) * 0.4 + F.l1_loss(y, y_g_hat)
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
-                loss_total = mel_l1 + spec_loss
+                loss_total = mel_l1 + spec_loss * 0.03
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -177,6 +183,8 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 optim_se.step()
 
                 epoch_loss_g_only += loss_total.item()
+                epoch_style_loss += style_loss.item()
+                epoch_d_loss += d_loss.item()
 
                 pbar.set_postfix(
                     loss=loss_total.item(), 
@@ -185,19 +193,42 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                     mel_l1=mel_l1.item(), 
                     d_mel_l1=epoch_loss_only/idx
                 )
-        
+
         scheduler_g.step()
         scheduler_se.step()
         scheduler_de.step()
-        steps+=1
+        steps += 1
+
+        # Сохранение лоссов за эпоху
+        losses_total.append(epoch_loss_g_only / len(dataloader))
+        losses_mel.append(epoch_loss_only / len(dataloader))
+        losses_style.append(epoch_style_loss / len(dataloader))
+        losses_dis.append(epoch_d_loss / len(dataloader))
+
         print("Learning rate:", scheduler_g.get_last_lr())
         if steps % checkpoint_interval == 0 and steps != 0:
             full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
 
-
         print(f"🔹Step: {steps}, Эпоха: [{epoch+1}/{epochs}], g_only: {epoch_loss_g_only / len(dataloader):.7f}, loss: {epoch_loss_only / len(dataloader):.7f}")
+
     print("✅ Обучение завершено! Сохраняем модель...")
-    for idx, d in enumerate(y_g_hat):
+
+    def plot_show(losses, label):
+        plt.figure(figsize=(12, 6))
+        plt.plot(losses, label=label)
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title(label)
+        plt.grid(True)
+        plt.savefig(label.lower().replace(" ", "_") + ".png")
+        plt.show()
+    # Построение графиков
+    plot_show(losses_total, label='Total Generator Loss')
+    plot_show(losses_mel, label='Mel Loss')
+    plot_show(losses_style, label='Style Loss')
+    plot_show(losses_dis, label='Discriminator Loss')
+    full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
+    for idx, d in enumerate(y_g_hat[:10]):
         plot_spectrograms__(
             [
                 x[idx].permute(1, 0).detach().cpu().numpy(), 
@@ -206,7 +237,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
             ], 
             ["x", "y", "res"]
         )
-    full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
+    
 
 def set_seed(seed):
     # random.seed(seed)
@@ -218,7 +249,8 @@ if __name__ == "__main__":
     # 🔹 Загружаем данные и запускаем обучение
     h = get_config("./configs/v1.json")
     dataset = AudioDataset(
-        "./../prepare/datasets/set_augs_2", 
+        "./../prepare/datasets/set_18.05.25", 
+        #"./../prepare/datasets/set_augs_2", 
         "./../prepare/data/ideals_",
         device, 
         h,
@@ -227,4 +259,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints", epochs=86, checkpoint_interval=20, new_learning_rate=0.000012)
+    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=257, checkpoint_interval=15, new_learning_rate=0.00006)
