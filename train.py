@@ -66,7 +66,7 @@ def full_save(
 def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None):
 
     generator = MelTransformer2(
-        hidden_dim=512, num_layers=5, nhead=16, ideal_dim=256, is_mel_ideal=False
+        hidden_dim=512, num_layers=5, nhead=16, ideal_dim=256
     ).to(device)
 
     style_encoder = StyleEncoder(dim_in=h.dim_in, style_dim=h.style_dim, max_conv_dim=h.hidden_dim).to(device)
@@ -156,6 +156,17 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
             for idx, batch in enumerate(pbar, 1):
                 x, y, ideal, note = batch
                 x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
+                
+                # m = torch.nn.GroupNorm(1, 80).to(device)
+                # x_norm = m(x)
+                # for idx, d in enumerate(x_norm[:10]):
+                #     plot_spectrograms__(
+                #         [
+                #             x[idx].permute(1, 0).detach().cpu().numpy(), 
+                #             x_norm[idx].permute(1, 0).detach().cpu().numpy(), 
+                #         ], 
+                #         ["x", "x_norm"]
+                #     )
 
                 min_ = 11.5129
                 x, y = x+min_, y+min_
@@ -290,4 +301,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=2, checkpoint_interval=5, new_learning_rate=0.0004)
+    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=5, checkpoint_interval=5, new_learning_rate=0.0004)

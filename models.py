@@ -190,19 +190,19 @@ LRELU_SLOPE = 0.1
 def conv_block(in_channels, out_channels, kernel_size=3, padding=1):
     return nn.Sequential(
         spectral_norm(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
-        #nn.BatchNorm1d(out_channels),
+        #torch.nn.GroupNorm(1, out_channels),
         nn.LeakyReLU(inplace=True)
     )
 
 def deconv_block(in_channels, out_channels, kernel_size=3, padding=1):
     return nn.Sequential(
         spectral_norm(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
-        #nn.BatchNorm1d(out_channels),
+        #torch.nn.GroupNorm(1, out_channels),
         nn.LeakyReLU(inplace=True)
     )
 
 class MelTransformer2(nn.Module):
-    def __init__(self, mel_dim=80, hidden_dim=256, ideal_dim=256, num_layers=4, nhead=16, is_mel_ideal=False):
+    def __init__(self, mel_dim=80, hidden_dim=256, ideal_dim=256, num_layers=4, nhead=16):
         super().__init__()
 
         # Входная сверточная последовательность
@@ -211,16 +211,10 @@ class MelTransformer2(nn.Module):
             conv_block(hidden_dim//2, hidden_dim)
         )
 
-        if is_mel_ideal:
-            self.ideal_conv = nn.Sequential(
-                conv_block(mel_dim, hidden_dim//2),
-                conv_block(hidden_dim//2, hidden_dim)
-            )
-        else:
-            self.ideal_conv = nn.Sequential(
-                conv_block(ideal_dim, hidden_dim//2),
-                conv_block(hidden_dim//2, hidden_dim)
-            )
+        self.ideal_conv = nn.Sequential(
+            conv_block(ideal_dim, hidden_dim//2),
+            conv_block(hidden_dim//2, hidden_dim)
+        )
 
         # Трансформеры
         encoder_layer = nn.TransformerEncoderLayer(
@@ -259,9 +253,9 @@ class MelTransformer2(nn.Module):
         ideal_embed = ideal_embed.transpose(1, 2)
 
         memory = self.encoder(ideal_embed)
-        memory= F.leaky_relu(memory, LRELU_SLOPE)
+        #memory= F.leaky_relu(memory)
         output = self.decoder(mel_embed, memory)
-        output= F.leaky_relu(output, LRELU_SLOPE)
+        #output= F.leaky_relu(output)
 
         # Назад для ConvTranspose1d: [B, T, C] → [B, C, T]
         output = output.transpose(1, 2)
