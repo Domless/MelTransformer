@@ -116,12 +116,26 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
 
 
         mel_orig = mel_tranform.prepare(waveform.to(device)).permute(0, 2, 1).to(device)
-        num_chunks = mel_orig.shape[1] // 29
-        mel_chunks = mel_orig[:, :num_chunks * 29, :].reshape(num_chunks, 29, 80).to(device)
+        num_chunks = mel_orig.shape[1] // 120
+        mel_chunks = mel_orig[:, :num_chunks * 120, :].reshape(num_chunks, 120, 80).to(device)
         
         #print(x.shape)
+        # dec_inp = dec_inp.expand(mel_orig.shape[0], -1, -1)
+        # y_mel = tr_generator(mel_orig, dec_inp)
+
+        # y_mel = y_mel + abs(y_mel.min())
+        # y_mel = y_mel * (mel_orig.max() + 11.5129)/y_mel.max() - 11.5129
+
         dec_inp = dec_inp.expand(mel_chunks.shape[0], -1, -1)
         y_mel = tr_generator(mel_chunks, dec_inp)
+
+        # min_vals = y_mel.min(dim=1, keepdim=True)[0]  # shape: [B, 1]
+        # y_mel = y_mel + min_vals.abs()
+
+        # y_max = mel_chunks.max(dim=1, keepdim=True)[0]  # shape: [B, 1]
+        # y_g_hat_max = y_mel.max(dim=1, keepdim=True)[0]  # shape: [B, 1]
+
+        # y_mel = y_mel * (y_max + 11.5129) / y_g_hat_max - 11.5129
 
         # # Склеим по временной оси
         mel_reshaped = y_mel.reshape(-1, 80).unsqueeze(0)  # [chunks * 40, 80]
@@ -156,7 +170,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         print(audio_s.squeeze().cpu().numpy().max())
 
         output_file = wav_path[:-4] +  '_generated_tr.wav'
-        torchaudio.save(output_file, audio_s.cpu()*2, h.sampling_rate)
+        torchaudio.save(output_file, audio_s.cpu(), h.sampling_rate)
 
         print(output_file)
 
@@ -168,9 +182,9 @@ def main():
         h,
         "./../prepare/data/ideals/1.wav",
         200,
-        "./checkpoints_hifi/g_02500002", 
-        "./checkpoints/tr_00000076", 
-        "./checkpoints/se_00000076", 
+        "./checkpoints_hifi/g_02500004", 
+        "./checkpoints_finetune/tr_00000405", 
+        "./checkpoints_finetune/se_00000405", 
         "./../prepare/data/ideals_",
         "./cache/ideals.npy",
         )

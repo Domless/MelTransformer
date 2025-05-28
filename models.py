@@ -202,7 +202,7 @@ def deconv_block(in_channels, out_channels, kernel_size=3, padding=1):
     )
 
 class MelTransformer2(nn.Module):
-    def __init__(self, mel_dim=80, hidden_dim=256, ideal_dim=256, num_layers=4, nhead=4, is_mel_ideal=False):
+    def __init__(self, mel_dim=80, hidden_dim=256, ideal_dim=256, num_layers=4, nhead=16, is_mel_ideal=False):
         super().__init__()
 
         # Входная сверточная последовательность
