@@ -66,7 +66,7 @@ def full_save(
 def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None):
 
     generator = MelTransformer2(
-        hidden_dim=256, num_layers=4, nhead=16, ideal_dim=256, is_mel_ideal=False
+        hidden_dim=512, num_layers=5, nhead=16, ideal_dim=256, is_mel_ideal=False
     ).to(device)
 
     style_encoder = StyleEncoder(dim_in=h.dim_in, style_dim=h.style_dim, max_conv_dim=h.hidden_dim).to(device)
@@ -156,6 +156,14 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
             for idx, batch in enumerate(pbar, 1):
                 x, y, ideal, note = batch
                 x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
+
+                min_ = 11.5129
+                x, y = x+min_, y+min_
+                max_x = x.amax(dim=(1, 2), keepdim=True)
+                coef = (2 * min_) /max_x
+                x = x * coef - min_
+                y = y * coef - min_
+
                 x, y = x.permute(0, 2, 1), y.permute(0, 2, 1)
 
                 ideal_to = style_encoder(ideal.detach())
@@ -164,10 +172,22 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 y_g_hat = generator(x, dec_inp)
                 gen_ideal = style_encoder(y.detach().permute(0, 2, 1))
 
-                mel_l1 = F.mse_loss(y, y_g_hat) * 0.4 + F.l1_loss(y, y_g_hat)
+                # min_vals = y_g_hat.min(dim=1, keepdim=True)[0]  # shape: [B, 1]
+                # y_g_hat = y_g_hat + min_vals.abs()
+
+                # # Аналогично считаем максимум в каждом батче
+                # y_max = y.max(dim=1, keepdim=True)[0]  # shape: [B, 1]
+                # y_g_hat_max = y_g_hat.max(dim=1, keepdim=True)[0]  # shape: [B, 1]
+
+                # # Масштабируем по батчам
+                # y_g_hat = y_g_hat * (y_max + 11.5129) / y_g_hat_max - 11.5129
+                # # for idx, d in enumerate(y_g_hat[:10]):
+                # #     print(x[idx].max(), y[idx].max(), y_g_hat[idx].max())
+
+                mel_l1 = F.smooth_l1_loss(y, y_g_hat) #F.l1_loss(y, y_g_hat) + F.mse_loss(y, y_g_hat) * 0.2 #F.smooth_l1_loss(y, y_g_hat)
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
-                loss_total = mel_l1 + spec_loss * 0.03
+                loss_total = mel_l1 + spec_loss * 0.01
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -185,6 +205,16 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 epoch_loss_g_only += loss_total.item()
                 epoch_style_loss += style_loss.item()
                 epoch_d_loss += d_loss.item()
+
+                # for idx, d in enumerate(y_g_hat[:10]):
+                #     plot_spectrograms__(
+                #         [
+                #             x[idx].permute(1, 0).detach().cpu().numpy(), 
+                #             y[idx].permute(1, 0).detach().cpu().numpy(), 
+                #             d.permute(1, 0).detach().cpu().numpy(),
+                #         ], 
+                #         ["x", "y", "res"]
+                #     )
 
                 pbar.set_postfix(
                     loss=loss_total.item(), 
@@ -212,7 +242,8 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
         print(f"🔹Step: {steps}, Эпоха: [{epoch+1}/{epochs}], g_only: {epoch_loss_g_only / len(dataloader):.7f}, loss: {epoch_loss_only / len(dataloader):.7f}")
 
     print("✅ Обучение завершено! Сохраняем модель...")
-
+    for idx, d in enumerate(y_g_hat[:10]):
+        print(x[idx].max(), y[idx].max(), y_g_hat[idx].max())
     def plot_show(losses, label):
         plt.figure(figsize=(12, 6))
         plt.plot(losses, label=label)
@@ -249,8 +280,8 @@ if __name__ == "__main__":
     # 🔹 Загружаем данные и запускаем обучение
     h = get_config("./configs/v1.json")
     dataset = AudioDataset(
-        "./../prepare/datasets/set_18.05.25", 
-        #"./../prepare/datasets/set_augs_2", 
+        #"./../prepare/datasets/set_18.05.25", 
+        "./../prepare/datasets/set_augs_2", 
         "./../prepare/data/ideals_",
         device, 
         h,
@@ -259,4 +290,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=257, checkpoint_interval=15, new_learning_rate=0.00006)
+    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=2, checkpoint_interval=5, new_learning_rate=0.0004)
