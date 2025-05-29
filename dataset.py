@@ -107,7 +107,8 @@ class AudioDataset(Dataset):
             with_shift=False,
             use_cache=False,
             cahce_folder = "./cache",
-            with_wav=False
+            with_wav=False,
+            augs=True,
         ):
         cache_ideals_file = f"{cahce_folder}/ideals.npy"
         cache_dataset_file = f"{cahce_folder}/data.npy"
@@ -117,6 +118,7 @@ class AudioDataset(Dataset):
         self._with_shift = with_shift
         self._use_cache = use_cache
         self._with_wav = with_wav
+        self._augs = augs
 
         self.sr=h.sampling_rate
         self.n_fft = h.n_fft
@@ -240,8 +242,16 @@ class AudioDataset(Dataset):
         else:
             f2 = f2 * (f1_max/f2_max)
 
+        # random
+        if self._augs:
+            coef = random.uniform(0.97, 1.03)
+            f1 = f1 * coef
+            f2 = f2 * coef
+
         f1 = f1-11.5129#.to(self.device) 
         f2 = f2-11.5129#.to(self.device)
+
+
         # print(f1.max(), f1.min())
         # print(f2.max(), f2.min())
 

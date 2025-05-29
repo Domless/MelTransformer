@@ -3,6 +3,9 @@ import torch
 import librosa
 import torchaudio.transforms as T
 
+def dynamic_range_compression_torch(x, C=1, clip_val=1e-5):
+    return torch.log(torch.clamp(x, min=clip_val) * C)
+    
 class MelTranform:
 
     @classmethod
@@ -29,6 +32,7 @@ class MelTranform:
             f_max=f_max,
             normalized=False,
             onesided=True,
+            power=1.0,
             pad_mode='reflect',
             center=center
         ).to(device)
@@ -42,7 +46,5 @@ class MelTranform:
         self.mel_transform.mel_scale.fb.copy_(torch.tensor(mel_basis))
         
     def prepare(self, data):
-        # m = self.mel_transform(data)
-        # m = m.clamp_(min=1e-5).log_()
+        return dynamic_range_compression_torch(self.mel_transform(data))
         return torch.log(torch.clamp(self.mel_transform(data), min=1e-5))
-        #return m
