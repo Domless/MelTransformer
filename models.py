@@ -229,7 +229,10 @@ class MelTransformer2(nn.Module):
 
         # Выходная обратная сверточная последовательность
         self.output_deconv = nn.Sequential(
-            conv_block(hidden_dim, hidden_dim//2, 3, 1),
+            #conv_block(hidden_dim, hidden_dim//2, 3, 1),
+            # conv_block(hidden_dim//2, hidden_dim//4, 3, 1),
+            nn.Conv1d(hidden_dim, hidden_dim//2, kernel_size=3, padding=1),
+            #nn.Conv1d(hidden_dim//2, hidden_dim//4, kernel_size=3, padding=1),
             nn.Conv1d(hidden_dim//2, mel_dim, kernel_size=1, padding=0)
             #nn.ConvTranspose1d(hidden_dim//2, mel_dim, kernel_size=3, padding=1)
         )
@@ -253,9 +256,11 @@ class MelTransformer2(nn.Module):
         ideal_embed = ideal_embed.transpose(1, 2)
 
         memory = self.encoder(ideal_embed)
+        #memory = F.group_norm(memory, 1)
         #memory= F.leaky_relu(memory)
         output = self.decoder(mel_embed, memory)
         #output= F.leaky_relu(output)
+        #output = F.group_norm(output, 1)
 
         # Назад для ConvTranspose1d: [B, T, C] → [B, C, T]
         output = output.transpose(1, 2)

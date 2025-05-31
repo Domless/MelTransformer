@@ -83,10 +83,26 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
         cp_d = scan_checkpoint(checkpoint_path, 'de_')
 
     last_epoch = -1
+    is_new_generator = False
     steps = 0
     if cp_g and cp_se:
         state_dict_g = load_checkpoint(cp_g, device)
-        generator.load_state_dict(state_dict_g['generator'])
+
+        # generator.load_state_dict(state_dict_g['generator'])
+        # Попробуем загрузить только совместимые параметры
+        state_dict = state_dict_g['generator']
+        model_dict = generator.state_dict()
+        missing = [k for k in model_dict if k not in state_dict or state_dict[k].shape != model_dict[k].shape]
+        print("Пропущенные слои:", missing)
+        if missing:
+            is_new_generator = True
+        # Отфильтруем параметры, которые есть и совпадают по размеру
+        filtered_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.shape == model_dict[k].shape}
+        # Обновим текущую модель совместимыми параметрами
+        model_dict.update(filtered_dict)
+        generator.load_state_dict(model_dict)
+
+
         steps = state_dict_g.get('steps', steps) 
         last_epoch = state_dict_g.get('epoch', last_epoch)
 
@@ -112,8 +128,9 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
         spec_d.parameters(),
         h.learning_rate, betas=[h.adam_b1, h.adam_b2]
     )
-    if cp_g and cp_se:
+    if cp_g and not is_new_generator:
         optim_g.load_state_dict(state_dict_g['optim'])
+    if cp_se:
         optim_se.load_state_dict(state_dict_se['optim'])
     if cp_d:
         optim_spec_d.load_state_dict(state_dict_d['optim'])
@@ -157,8 +174,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 x, y, ideal, note = batch
                 x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
                 
-                # m = torch.nn.GroupNorm(1, 80).to(device)
-                # x_norm = m(x)
+                # x_norm = F.group_norm(x, 1)
                 # for idx, d in enumerate(x_norm[:10]):
                 #     plot_spectrograms__(
                 #         [
@@ -198,7 +214,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 mel_l1 = F.smooth_l1_loss(y, y_g_hat) #F.l1_loss(y, y_g_hat) + F.mse_loss(y, y_g_hat) * 0.2 #F.smooth_l1_loss(y, y_g_hat)
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
-                loss_total = mel_l1 + spec_loss * 0.005
+                loss_total = mel_l1 + spec_loss * 0.001
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -291,8 +307,8 @@ if __name__ == "__main__":
     # 🔹 Загружаем данные и запускаем обучение
     h = get_config("./configs/v1.json")
     dataset = AudioDataset(
-        #"./../prepare/datasets/set_18.05.25", 
-        "./../prepare/datasets/set_augs_2", 
+        "./../prepare/datasets/set_18.05.25", 
+        #"./../prepare/datasets/set_augs_2", 
         "./../prepare/data/ideals_",
         device, 
         h,
@@ -301,4 +317,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=15, checkpoint_interval=4, new_learning_rate=0.0001)
+    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=70, checkpoint_interval=100, new_learning_rate=0.00002)
