@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 from utils.frame import VocalData, freq_to_note, load_vocals
 from utils.utils import shift, files_with_type_fiter, load_l0_vocals
 from utils.mel import MelTranform
-SETS = 3
+SETS = 2
 
 # 🔹 Dataset для загрузки и обработки аудио
 class AudioDataset(Dataset):
@@ -233,13 +233,17 @@ class AudioDataset(Dataset):
         if idx % SETS == 1:
             f2_name, f1_name = f1_name, f2_name
             frequencies_f1, frequencies_f2 = frequencies_f2, frequencies_f1
-        elif idx % SETS == 2:
-            if random.choice([0, 1]) == 0:
-                f2_name, f1_name = f1_name, f1_name
-                frequencies_f1, frequencies_f2 = frequencies_f1, frequencies_f1
-            else:
-                f2_name, f1_name = f2_name, f2_name
-                frequencies_f1, frequencies_f2 = frequencies_f2, frequencies_f2
+        # elif idx % SETS == 2:
+        #     if random.choice([0, 1]) == 0:
+        #         f2_name, f1_name = f1_name, f1_name
+        #         frequencies_f1, frequencies_f2 = frequencies_f1, frequencies_f1
+        #     else:
+        #         f2_name, f1_name = f2_name, f2_name
+        #         frequencies_f1, frequencies_f2 = frequencies_f2, frequencies_f2
+
+        if random.random() <= 0.2:
+            f2_name, f1_name = f1_name, f1_name
+            frequencies_f1, frequencies_f2 = frequencies_f1, frequencies_f1
 
         f1 = self.cache_dataset[f1_name][pos]+11.5129#.to(self.device) 
         f2 = self.cache_dataset[f2_name][pos]+11.5129#.to(self.device)
