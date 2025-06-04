@@ -191,14 +191,14 @@ def conv_block(in_channels, out_channels, kernel_size=3, padding=1):
     return nn.Sequential(
         spectral_norm(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
         #torch.nn.GroupNorm(1, out_channels),
-        nn.LeakyReLU(inplace=True)
+        nn.LeakyReLU(0.1, inplace=True)
     )
 
 def deconv_block(in_channels, out_channels, kernel_size=3, padding=1):
     return nn.Sequential(
         spectral_norm(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
         #torch.nn.GroupNorm(1, out_channels),
-        nn.LeakyReLU(inplace=True)
+        nn.LeakyReLU(0.1, inplace=True)
     )
 
 class MelTransformer2(nn.Module):
@@ -233,7 +233,7 @@ class MelTransformer2(nn.Module):
             # conv_block(hidden_dim//2, hidden_dim//4, 3, 1),
             nn.Conv1d(hidden_dim, hidden_dim//2, kernel_size=3, padding=1),
             #nn.Conv1d(hidden_dim//2, hidden_dim//4, kernel_size=3, padding=1),
-            nn.Conv1d(hidden_dim//2, mel_dim, kernel_size=1, padding=0)
+            nn.Conv1d(hidden_dim//2, mel_dim, kernel_size=3, padding=1)
             #nn.ConvTranspose1d(hidden_dim//2, mel_dim, kernel_size=3, padding=1)
         )
 

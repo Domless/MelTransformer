@@ -5,6 +5,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import os
 import torch
 import torch.nn.functional as F
+import torchaudio.functional as AF
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
@@ -61,6 +62,28 @@ def full_save(
             "optim": optim_spec_d.state_dict(),
         }
     )
+
+
+def mel_to_mfcc(log_mel: torch.Tensor, n_mfcc: int = 34, norm: str = 'ortho', n_mels = 80) -> torch.Tensor:
+    """
+    Преобразует лог-мел-спектрограмму в MFCC.
+
+    Args:
+        log_mel (torch.Tensor): Лог-мел-спектрограмма размерности [batch, n_mels, time].
+        n_mfcc (int): Количество MFCC коэффициентов для извлечения.
+        norm (str): Нормализация DCT ('ortho' или None).
+
+    Returns:
+        torch.Tensor: MFCC размерности [batch, n_mfcc, time].
+    """
+    dct_mat = AF.create_dct(n_mfcc, n_mels, norm=norm).to(log_mel.device)  # [n_mfcc, n_mels]
+    # Правильный порядок: перемножаем лог-мел [B, n_mels, T] с DCT [n_mfcc, n_mels]
+    # DCT нужно транспонировать: [n_mfcc, n_mels] → [n_mels, n_mfcc]
+    dct_mat_T = dct_mat.transpose(0, 1)  # [n_mels, n_mfcc]
+
+    # Выполняем батчевое матричное умножение: [B, n_mels, T] x [n_mels, n_mfcc] = [B, n_mfcc, T]
+    mfcc = torch.matmul(dct_mat_T.unsqueeze(0), log_mel)  # [1, n_mels, n_mfcc] x [B, n_mels, T] → [B, n_mfcc, T]
+    return mfcc[:, 1:, :]
 
 # 🔹 Функция обучения
 def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None):
@@ -162,27 +185,19 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     losses_mel = []
     losses_style = []
     losses_dis = []
+    losses_mfcc = []
 
     for epoch in range(last_epoch+1, epochs):
         epoch_loss_g_only = 0.0
         epoch_loss_only = 0.0
         epoch_style_loss = 0.0
         epoch_d_loss = 0.0
+        epoch_mfcc_loss = 0.0
 
         with tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs} - Train") as pbar:
             for idx, batch in enumerate(pbar, 1):
                 x, y, ideal, note = batch
                 x, y, ideal, note = x.to(device), y.to(device), ideal.to(device), note.to(device)
-                
-                # x_norm = F.group_norm(x, 1)
-                # for idx, d in enumerate(x_norm[:10]):
-                #     plot_spectrograms__(
-                #         [
-                #             x[idx].permute(1, 0).detach().cpu().numpy(), 
-                #             x_norm[idx].permute(1, 0).detach().cpu().numpy(), 
-                #         ], 
-                #         ["x", "x_norm"]
-                #     )
 
                 # min_ = 11.5129
                 # x, y = x+min_, y+min_
@@ -214,7 +229,12 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 mel_l1 = F.l1_loss(y_g_hat, y) #F.l1_loss(y, y_g_hat) + F.mse_loss(y, y_g_hat) * 0.2 #F.smooth_l1_loss(y, y_g_hat)
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
-                loss_total = mel_l1 + spec_loss * 0.001
+
+                # mfcc_y = mel_to_mfcc(y.permute(0, 2, 1))
+                # mfcc_y_g_hat = mel_to_mfcc(y_g_hat.permute(0, 2, 1))
+                # mfcc_loss = F.l1_loss(mfcc_y, mfcc_y_g_hat)
+
+                loss_total = mel_l1 + spec_loss * 0.001# + mfcc_loss * 0.4
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -232,6 +252,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 epoch_loss_g_only += loss_total.item()
                 epoch_style_loss += style_loss.item()
                 epoch_d_loss += d_loss.item()
+                #epoch_mfcc_loss += mfcc_loss.item()
 
                 # for idx, d in enumerate(y_g_hat[:10]):
                 #     plot_spectrograms__(
@@ -243,13 +264,24 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 #         ["x", "y", "res"]
                 #     )
 
+
                 pbar.set_postfix(
                     loss=loss_total.item(), 
                     style_loss=style_loss.item(), 
                     dis_loss=d_loss.item(), 
                     mel_l1=mel_l1.item(), 
-                    d_mel_l1=epoch_loss_only/idx
+                    d_mel_l1=epoch_loss_only/idx,
+                    #mfcc_loss=mfcc_loss.item(),
                 )
+
+                # for idx, d in enumerate(mfcc_y):
+                #     plot_spectrograms__(
+                #         [
+                #             mfcc_y[idx].detach().cpu().numpy(), 
+                #             mfcc_y_g_hat[idx].detach().cpu().numpy(), 
+                #         ], 
+                #         ["mfcc_y", "mfcc_y_g_hat"]
+                #     )
 
         scheduler_g.step()
         scheduler_se.step()
@@ -261,6 +293,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
         losses_mel.append(epoch_loss_only / len(dataloader))
         losses_style.append(epoch_style_loss / len(dataloader))
         losses_dis.append(epoch_d_loss / len(dataloader))
+        #losses_mfcc.append(epoch_mfcc_loss / len(dataloader))
 
         print("Learning rate:", scheduler_g.get_last_lr())
         if steps % checkpoint_interval == 0 and steps != 0:
@@ -285,6 +318,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
     plot_show(losses_mel, label='Mel Loss')
     plot_show(losses_style, label='Style Loss')
     plot_show(losses_dis, label='Discriminator Loss')
+    #plot_show(losses_mfcc, label='MFCC Loss')
     full_save(checkpoint_path, steps, epoch, generator, optim_g, style_encoder, optim_se, spec_d, optim_spec_d)
     for idx, d in enumerate(y_g_hat[:10]):
         plot_spectrograms__(
@@ -317,4 +351,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=423, checkpoint_interval=360, new_learning_rate=0.000007)
+    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=455, checkpoint_interval=360, new_learning_rate=0.0001)
