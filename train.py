@@ -211,10 +211,10 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 # # for idx, d in enumerate(y_g_hat[:10]):
                 # #     print(x[idx].max(), y[idx].max(), y_g_hat[idx].max())
 
-                mel_l1 = F.smooth_l1_loss(y_g_hat, y, beta=0.25) #F.l1_loss(y, y_g_hat) + F.mse_loss(y, y_g_hat) * 0.2 #F.smooth_l1_loss(y, y_g_hat)
+                mel_l1 = F.l1_loss(y_g_hat, y) #F.l1_loss(y, y_g_hat) + F.mse_loss(y, y_g_hat) * 0.2 #F.smooth_l1_loss(y, y_g_hat)
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
-                loss_total = mel_l1 + spec_loss * 0.003
+                loss_total = mel_l1 + spec_loss * 0.001
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -317,4 +317,4 @@ if __name__ == "__main__":
     set_seed(42)
     #dataset = AudioDataset("./../prepare/datasets/test_set", "./../prepare/data/ideals_", device, h)
     dataloader = DataLoader(dataset, batch_size=h.batch_size, shuffle=True)#, num_workers=2, pin_memory=True)
-    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=201, checkpoint_interval=300, new_learning_rate=0.00005)
+    train_vocoder(h, dataloader, "./checkpoints_finetune", epochs=423, checkpoint_interval=360, new_learning_rate=0.000007)
