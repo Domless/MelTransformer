@@ -88,7 +88,7 @@ def mel_to_mfcc(log_mel: torch.Tensor, n_mfcc: int = 34, norm: str = 'ortho', n_
     return mfcc[:, 1:, :]
 
 # 🔹 Функция обучения
-def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None, safe_image_path = None):
+def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None, safe_image_path = None, force_new_generator=False):
 
     generator = MelTransformer2(
         hidden_dim=h.tr_hidden_dim, num_layers=h.tr_num_layers, nhead=h.tr_nhead, ideal_dim=h.style_dim
@@ -108,7 +108,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
         cp_d = scan_checkpoint(checkpoint_path, 'de_')
 
     last_epoch = -1
-    is_new_generator = False
+    is_new_generator = force_new_generator
     steps = 0
     if cp_g and cp_se:
         state_dict_g = load_checkpoint(cp_g, device)
@@ -383,8 +383,9 @@ if __name__ == "__main__":
         h, 
         dataloader, 
         "./checkpoints_finetune", 
-        epochs=1125, 
+        epochs=1126, 
         checkpoint_interval=1200, 
         new_learning_rate=0.00005, 
-        safe_image_path="./results/real/5"
+        safe_image_path="./results/real/5",
+        force_new_generator=True,
     )
