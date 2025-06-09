@@ -241,9 +241,9 @@ class AudioDataset(Dataset):
         #         f2_name, f1_name = f2_name, f2_name
         #         frequencies_f1, frequencies_f2 = frequencies_f2, frequencies_f2
 
-        if random.random() <= 0.2:
-            f2_name, f1_name = f1_name, f1_name
-            frequencies_f1, frequencies_f2 = frequencies_f1, frequencies_f1
+        # if random.random() <= 0.2:
+        #     f2_name, f1_name = f1_name, f1_name
+        #     frequencies_f1, frequencies_f2 = frequencies_f1, frequencies_f1
 
         f1 = self.cache_dataset[f1_name][pos]+11.5129#.to(self.device) 
         f2 = self.cache_dataset[f2_name][pos]+11.5129#.to(self.device)

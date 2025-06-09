@@ -187,18 +187,18 @@ class ResBlock2(torch.nn.Module):
 
 
 LRELU_SLOPE = 0.1
-def conv_block(in_channels, out_channels, kernel_size=3, padding=1):
+def conv_block(in_channels, out_channels, kernel_size=5, padding=2):
     return nn.Sequential(
         spectral_norm(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
         #torch.nn.GroupNorm(1, out_channels),
-        nn.LeakyReLU(0.1, inplace=True)
+        #nn.LeakyReLU(0.1, inplace=True)
     )
 
-def deconv_block(in_channels, out_channels, kernel_size=3, padding=1):
+def deconv_block(in_channels, out_channels, kernel_size=5, padding=2):
     return nn.Sequential(
         spectral_norm(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
         #torch.nn.GroupNorm(1, out_channels),
-        nn.LeakyReLU(0.1, inplace=True)
+        #nn.LeakyReLU(0.1, inplace=True)
     )
 
 class MelTransformer2(nn.Module):
@@ -211,16 +211,18 @@ class MelTransformer2(nn.Module):
             conv_block(hidden_dim//2, hidden_dim)
         )
 
+        # hidden_size = ideal_dim + ((hidden_dim - ideal_dim)//2)
+        # print(hidden_size)
         self.ideal_conv = nn.Sequential(
-            conv_block(ideal_dim, hidden_dim//2),
-            conv_block(hidden_dim//2, hidden_dim)
+            conv_block(ideal_dim, hidden_dim),
+            #conv_block(hidden_size, hidden_dim)
         )
 
         # Трансформеры
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4
-        )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        # encoder_layer = nn.TransformerEncoderLayer(
+        #     d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4
+        # )
+        # self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=hidden_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=hidden_dim * 4
@@ -237,7 +239,7 @@ class MelTransformer2(nn.Module):
             #nn.ConvTranspose1d(hidden_dim//2, mel_dim, kernel_size=3, padding=1)
         )
 
-        #self.final = nn.Linear(mel_dim, mel_dim)
+        #self.final = nn.Linear(hidden_dim, mel_dim)
 
     def forward(self, mel_input, ideal_input):
         """
@@ -255,10 +257,10 @@ class MelTransformer2(nn.Module):
         mel_embed = mel_embed.transpose(1, 2)
         ideal_embed = ideal_embed.transpose(1, 2)
 
-        memory = self.encoder(ideal_embed)
+        # memory = self.encoder(mel_embed)
         #memory = F.group_norm(memory, 1)
         #memory= F.leaky_relu(memory)
-        output = self.decoder(mel_embed, memory)
+        output = self.decoder(mel_embed, ideal_embed)
         #output= F.leaky_relu(output)
         #output = F.group_norm(output, 1)
 
@@ -268,5 +270,42 @@ class MelTransformer2(nn.Module):
 
         # Финальный выход: [B, C, T] → [B, T, C]
         mel_out = mel_out.transpose(1, 2)
-        #mel_out = self.final(mel_out)  # B × T × mel_dim
+        #mel_out = self.final(output)  # B × T × mel_dim
         return mel_out
+    
+
+class MelTransformer3(nn.Module):
+    def __init__(self, mel_dim=80, hidden_dim=256, ideal_dim=256, num_layers=4, nhead=16):
+        super().__init__()
+
+        # hidden_size = ideal_dim + ((hidden_dim - ideal_dim)//2)
+        # print(hidden_size)
+        self.ideal_conv = nn.Sequential(
+            conv_block(ideal_dim, mel_dim),
+        )
+
+        # Трансформеры
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=mel_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=mel_dim * 4
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=mel_dim, nhead=nhead, batch_first=True, norm_first=True, dim_feedforward=mel_dim * 4
+        )
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+
+
+    def forward(self, mel_input, ideal_input):
+        """
+        mel_input: [B, T, mel_dim]
+        ideal_input: [B, T, mel_dim] or [B, T, ideal_dim]
+        """
+        ideal_input = ideal_input.transpose(1, 2)
+        ideal_embed = self.ideal_conv(ideal_input)
+        ideal_embed = ideal_embed.transpose(1, 2)
+
+        memory = self.encoder(mel_input)
+        output = self.decoder(memory, ideal_embed)
+
+        return output
