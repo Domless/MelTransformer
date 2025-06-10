@@ -64,10 +64,12 @@ def load_hifi_gan(checkpoint_file, device):
 def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_checkpoint, ideals_path, ideals_file = None):
 
     tr_generator = MelTransformer2(
-        hidden_dim=256, num_layers=4, nhead=16, ideal_dim=256, is_mel_ideal=False
+        hidden_dim=h.tr_hidden_dim, num_layers=h.tr_num_layers, nhead=h.tr_nhead, ideal_dim=h.style_dim
     ).to(device)
+
     style_encoder = StyleEncoder(dim_in=h.dim_in, style_dim=h.style_dim, max_conv_dim=h.hidden_dim).to(device)
-    pitch_embed = torch.nn.Embedding(300, 256, padding_idx=0).to(device)
+    pitch_embed = torch.nn.Embedding(300, h.style_dim, padding_idx=0).to(device)
+
 
     hifi_gan = load_hifi_gan(hifi_gan_checkpoint, device)
 
@@ -120,14 +122,14 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         mel_chunks = mel_orig[:, :num_chunks * 120, :].reshape(num_chunks, 120, 80).to(device)
         
         #print(x.shape)
-        # dec_inp = dec_inp.expand(mel_orig.shape[0], -1, -1)
-        # y_mel = tr_generator(mel_orig, dec_inp)
+        dec_inp = dec_inp.expand(mel_orig.shape[0], -1, -1)
+        y_mel = tr_generator(mel_orig, dec_inp)
 
         # y_mel = y_mel + abs(y_mel.min())
         # y_mel = y_mel * (mel_orig.max() + 11.5129)/y_mel.max() - 11.5129
 
-        dec_inp = dec_inp.expand(mel_chunks.shape[0], -1, -1)
-        y_mel = tr_generator(mel_chunks, dec_inp)
+        # dec_inp = dec_inp.expand(mel_chunks.shape[0], -1, -1)
+        # y_mel = tr_generator(mel_chunks, dec_inp)
 
         # min_vals = y_mel.min(dim=1, keepdim=True)[0]  # shape: [B, 1]
         # y_mel = y_mel + min_vals.abs()
@@ -158,7 +160,7 @@ def inference(h, wav_path, target: float, hifi_gan_checkpoint, g_checkpoint, se_
         # mel_chunks = mel_reshaped[:n_chunks * 33]  # Обрезаем лишнее, если есть
         # mel_chunks = mel_chunks.view(n_chunks, 33, 80).permute(0, 2, 1)  # [n_chunks, 80, 33]
 
-        y_res = hifi_gan(mel_reshaped.permute(0, 2, 1))#[:, :, :chunks.shape[1]]
+        y_res = hifi_gan(y_mel.permute(0, 2, 1)) * 2#[:, :, :chunks.shape[1]]
 
         audio_s = y_res.squeeze().reshape(1, -1)
         audio_s = torchaudio.functional.lowpass_biquad(audio_s, h.sampling_rate, 1500)
@@ -181,10 +183,10 @@ def main():
     inference(
         h,
         "./../prepare/data/ideals/1.wav",
-        200,
-        "./checkpoints_hifi/g_02500004", 
-        "./checkpoints_finetune/tr_00000405", 
-        "./checkpoints_finetune/se_00000405", 
+        180,
+        "./checkpoints_hifi/g_02500000", 
+        "./checkpoints_finetune/tr_00001135", 
+        "./checkpoints_finetune/se_00001135", 
         "./../prepare/data/ideals_",
         "./cache/ideals.npy",
         )

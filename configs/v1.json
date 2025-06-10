@@ -4,14 +4,14 @@
     "learning_rate": 0.0005,
     "adam_b1": 0.8,
     "adam_b2": 0.99,
-    "lr_decay": 0.98,
+    "lr_decay": 0.925,
     "seed": 1234,
 
-    "segment_size": 32768,
+    "segment_size": 16384,
     "num_mels": 80,
     "num_freq": 1025,
     "n_fft": 1024,
-    "hop_size": 32768,
+    "hop_size": 16384,
     "win_size": 1024,
     "mel_hop_size": 256,
 
@@ -27,5 +27,9 @@
     "hidden_dim": 512,
     "style_dim": 256,
     "max_conv_dim": 512,
-    "n_layer": 3
+    "n_layer": 3,
+
+    "tr_hidden_dim": 512, 
+    "tr_num_layers": 5,
+    "tr_nhead": 16
 }

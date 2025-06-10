@@ -236,7 +236,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 mfcc_y_g_hat = mel_to_mfcc(y_g_hat.permute(0, 2, 1))
                 mfcc_loss = F.mse_loss(mfcc_y, mfcc_y_g_hat)
 
-                loss_total = mel_l1 + spec_loss * 0.005 + mfcc_loss * 0.25
+                loss_total = mel_l1 + spec_loss * 0.005 + mfcc_loss * 0.1
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -383,9 +383,9 @@ if __name__ == "__main__":
         h, 
         dataloader, 
         "./checkpoints_finetune", 
-        epochs=1126, 
+        epochs=1135, 
         checkpoint_interval=1200, 
-        new_learning_rate=0.00005, 
-        safe_image_path="./results/real/5",
-        force_new_generator=True,
+        #new_learning_rate=0.00005, 
+        safe_image_path="./results/real/6",
+        #force_new_generator=True,
     )
