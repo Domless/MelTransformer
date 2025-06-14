@@ -85,7 +85,7 @@ def mel_to_mfcc(log_mel: torch.Tensor, n_mfcc: int = 34, norm: str = 'ortho', n_
 
     # Выполняем батчевое матричное умножение: [B, n_mels, T] x [n_mels, n_mfcc] = [B, n_mfcc, T]
     mfcc = torch.matmul(dct_mat_T.unsqueeze(0), log_mel)  # [1, n_mels, n_mfcc] x [B, n_mels, T] → [B, n_mfcc, T]
-    return mfcc[:, 1:, :]
+    return mfcc
 
 # 🔹 Функция обучения
 def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval=7, new_learning_rate=None, safe_image_path = None, force_new_generator=False):
@@ -211,11 +211,11 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 x, y = x.permute(0, 2, 1), y.permute(0, 2, 1)
 
                 ideal_to = style_encoder(ideal.detach())
-                pitch_emb = pitch_embed(f0_to_coarse(note))
-                dec_inp = torch.stack([pitch_emb, ideal_to.detach().squeeze(1)], 1)
-                y_g_hat = generator(x, dec_inp)
                 gen_ideal = style_encoder(y.detach().permute(0, 2, 1))
-
+                pitch_emb = pitch_embed(f0_to_coarse(note))
+                dec_inp = torch.stack([pitch_emb, gen_ideal.detach().squeeze(1)], 1)
+                y_g_hat = generator(x, dec_inp)
+                
                 # min_vals = y_g_hat.min(dim=1, keepdim=True)[0]  # shape: [B, 1]
                 # y_g_hat = y_g_hat + min_vals.abs()
 
@@ -236,7 +236,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 mfcc_y_g_hat = mel_to_mfcc(y_g_hat.permute(0, 2, 1))
                 mfcc_loss = F.mse_loss(mfcc_y, mfcc_y_g_hat)
 
-                loss_total = mel_l1 + spec_loss * 0.005 + mfcc_loss * 0.1
+                loss_total = mel_l1 + spec_loss * 0.005 + mfcc_loss * 0.15
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -369,8 +369,8 @@ if __name__ == "__main__":
     # 🔹 Загружаем данные и запускаем обучение
     h = get_config("./configs/v1.json")
     dataset = AudioDataset(
-        #"./../prepare/datasets/set_18.05.25", 
-        "./../prepare/datasets/set_augs_2", 
+        "./../prepare/datasets/set_12.06.25", 
+        #"./../prepare/datasets/set_augs_2", 
         "./../prepare/data/ideals_",
         device, 
         h,
@@ -383,9 +383,9 @@ if __name__ == "__main__":
         h, 
         dataloader, 
         "./checkpoints_finetune", 
-        epochs=1135, 
-        checkpoint_interval=1200, 
-        #new_learning_rate=0.00005, 
-        safe_image_path="./results/real/6",
+        epochs=1293, 
+        checkpoint_interval=1225, 
+        new_learning_rate=0.000002, 
+        safe_image_path="./results/real/10",
         #force_new_generator=True,
     )
