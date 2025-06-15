@@ -187,14 +187,14 @@ class ResBlock2(torch.nn.Module):
 
 
 LRELU_SLOPE = 0.1
-def conv_block(in_channels, out_channels, kernel_size=5, padding=2):
+def conv_block(in_channels, out_channels, kernel_size=3, padding=1):
     return nn.Sequential(
         spectral_norm(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
         #torch.nn.GroupNorm(1, out_channels),
         #nn.LeakyReLU(0.1, inplace=True)
     )
 
-def deconv_block(in_channels, out_channels, kernel_size=5, padding=2):
+def deconv_block(in_channels, out_channels, kernel_size=3, padding=1):
     return nn.Sequential(
         spectral_norm(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)),
         #torch.nn.GroupNorm(1, out_channels),
