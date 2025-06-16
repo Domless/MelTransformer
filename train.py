@@ -228,7 +228,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 # # for idx, d in enumerate(y_g_hat[:10]):
                 # #     print(x[idx].max(), y[idx].max(), y_g_hat[idx].max())
 
-                mel_l1 = F.l1_loss(y_g_hat, y) #F.l1_loss(y, y_g_hat) + F.mse_loss(y, y_g_hat) * 0.2 #F.smooth_l1_loss(y, y_g_hat)
+                mel_l1 = F.mse_loss(y_g_hat, y) #F.l1_loss(y, y_g_hat) + F.mse_loss(y, y_g_hat) * 0.2 #F.smooth_l1_loss(y, y_g_hat)
                 epoch_loss_only += mel_l1.item()
                 spec_loss = g_spec_loss(y, y_g_hat)
 
@@ -236,7 +236,7 @@ def train_vocoder(h, dataloader, checkpoint_path, epochs=30, checkpoint_interval
                 mfcc_y_g_hat = mel_to_mfcc(y_g_hat.permute(0, 2, 1))
                 mfcc_loss = F.mse_loss(mfcc_y, mfcc_y_g_hat)
 
-                loss_total = mel_l1 + spec_loss * 0.005 + mfcc_loss * 0.1
+                loss_total = mel_l1 + spec_loss * 0.002 + mfcc_loss * 0.05
                 optim_g.zero_grad()
                 loss_total.backward()
                 optim_g.step()
@@ -369,8 +369,8 @@ if __name__ == "__main__":
     # 🔹 Загружаем данные и запускаем обучение
     h = get_config("./configs/v1.json")
     dataset = AudioDataset(
-        #"./../prepare/datasets/set_12.06.25", 
-        "./../prepare/datasets/set_augs_2", 
+        "./../prepare/datasets/set_12.06.25", 
+        #"./../prepare/datasets/set_augs_2", 
         "./../prepare/data/ideals_",
         device, 
         h,
@@ -383,8 +383,9 @@ if __name__ == "__main__":
         h, 
         dataloader, 
         "./checkpoints_finetune", 
-        epochs=1343, 
+        epochs=1360, 
         checkpoint_interval=1225,
+        new_learning_rate=0.000002,
         safe_image_path="./results/real/11",
         #force_new_generator=True,
     )
